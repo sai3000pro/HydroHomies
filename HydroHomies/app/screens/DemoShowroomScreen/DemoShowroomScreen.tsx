@@ -18,9 +18,9 @@ import { Text } from "@/components/Text"
 import { TxKeyPath, isRTL } from "@/i18n"
 import { translate } from "@/i18n/translate"
 import { DemoTabParamList, DemoTabScreenProps } from "@/navigators/navigationTypes"
-import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
+import type { ThemedStyle } from "@/theme/types"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 
 import * as Demos from "./demos"
@@ -325,5 +325,3 @@ const $demoItemDescription: ThemedStyle<TextStyle> = ({ spacing }) => ({
 const $demoUseCasesSpacer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingBottom: spacing.xxl,
 })
-
-// @demo remove-file

@@ -8,5 +8,3 @@ export * from "./DemoAutoImage"
 export * from "./DemoText"
 export * from "./DemoHeader"
 export * from "./DemoEmptyState"
-
-// @demo remove-file

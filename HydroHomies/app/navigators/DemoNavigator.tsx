@@ -9,8 +9,8 @@ import { DemoCommunityScreen } from "@/screens/DemoCommunityScreen"
 import { DemoDebugScreen } from "@/screens/DemoDebugScreen"
 import { DemoPodcastListScreen } from "@/screens/DemoPodcastListScreen"
 import { DemoShowroomScreen } from "@/screens/DemoShowroomScreen/DemoShowroomScreen"
-import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
+import type { ThemedStyle } from "@/theme/types"
 
 import type { DemoTabParamList } from "./navigationTypes"
 
@@ -115,5 +115,3 @@ const $tabBarLabel: ThemedStyle<TextStyle> = ({ colors, typography }) => ({
   lineHeight: 16,
   color: colors.text,
 })
-
-// @demo remove-file

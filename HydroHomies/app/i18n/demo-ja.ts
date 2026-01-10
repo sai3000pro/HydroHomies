@@ -460,5 +460,3 @@ export const demoJa: DemoTranslations = {
 }
 
 export default demoJa
-
-// @demo remove-file

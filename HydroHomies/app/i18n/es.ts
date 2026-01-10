@@ -1,4 +1,4 @@
-import demoEs from "./demo-es" // @demo remove-current-line
+import demoEs from "./demo-es"
 import { Translations } from "./en"
 
 const es: Translations = {
@@ -6,21 +6,21 @@ const es: Translations = {
     ok: "OK",
     cancel: "Cancelar",
     back: "Volver",
-    logOut: "Cerrar sesión", // @demo remove-current-line
+    logOut: "Cerrar sesión",
   },
   welcomeScreen: {
     postscript:
       "psst — Esto probablemente no es cómo se va a ver tu app. (A menos que tu diseñador te haya enviado estas pantallas, y en ese caso, ¡lánzalas en producción!)",
     readyForLaunch: "Tu app, casi lista para su lanzamiento",
     exciting: "(¡ohh, esto es emocionante!)",
-    letsGo: "¡Vamos!", // @demo remove-current-line
+    letsGo: "¡Vamos!",
   },
   errorScreen: {
     title: "¡Algo salió mal!",
     friendlySubtitle:
       "Esta es la pantalla que verán tus usuarios en producción cuando haya un error. Vas a querer personalizar este mensaje (que está ubicado en `app/i18n/es.ts`) y probablemente también su diseño (`app/screens/ErrorScreen`). Si quieres eliminarlo completamente, revisa `app/app.tsx` y el componente <ErrorBoundary>.",
     reset: "REINICIA LA APP",
-    traceTitle: "Error desde %{name}", // @demo remove-current-line
+    traceTitle: "Error desde %{name}",
   },
   emptyStateComponent: {
     generic: {
@@ -30,7 +30,7 @@ const es: Translations = {
       button: "Intentemos de nuevo",
     },
   },
-  // @demo remove-block-start
+
   errors: {
     invalidEmail: "Email inválido.",
   },
@@ -124,9 +124,8 @@ const es: Translations = {
         "No se han agregado episodios favoritos todavía. ¡Presiona el corazón dentro de un episodio para agregarlo a tus favoritos!",
     },
   },
-  // @demo remove-block-start
+
   ...demoEs,
-  // @demo remove-block-end
 }
 
 export default es

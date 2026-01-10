@@ -32,9 +32,9 @@ import { isRTL } from "@/i18n"
 import { translate } from "@/i18n/translate"
 import { DemoTabScreenProps } from "@/navigators/navigationTypes"
 import type { EpisodeItem } from "@/services/api/types"
-import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
+import type { ThemedStyle } from "@/theme/types"
 import { delay } from "@/utils/delay"
 import { openLinkInBrowser } from "@/utils/openLinkInBrowser"
 
@@ -382,5 +382,3 @@ const $emptyStateImage: ImageStyle = {
   transform: [{ scaleX: isRTL ? -1 : 1 }],
 }
 // #endregion
-
-// @demo remove-file

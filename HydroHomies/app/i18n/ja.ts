@@ -1,4 +1,4 @@
-import demoJa from "./demo-ja" // @demo remove-current-line
+import demoJa from "./demo-ja"
 import { Translations } from "./en"
 
 const ja: Translations = {
@@ -6,21 +6,21 @@ const ja: Translations = {
     ok: "OK",
     cancel: "キャンセル",
     back: "戻る",
-    logOut: "ログアウト", // @demo remove-current-line
+    logOut: "ログアウト",
   },
   welcomeScreen: {
     postscript:
       "注目！ — このアプリはお好みの見た目では無いかもしれません(デザイナーがこのスクリーンを送ってこない限りは。もしそうなら公開しちゃいましょう！)",
     readyForLaunch: "このアプリはもう少しで公開できます！",
     exciting: "(楽しみですね！)",
-    letsGo: "レッツゴー！", // @demo remove-current-line
+    letsGo: "レッツゴー！",
   },
   errorScreen: {
     title: "問題が発生しました",
     friendlySubtitle:
       "本番では、エラーが投げられた時にこのページが表示されます。もし使うならこのメッセージに変更を加えてください(`app/i18n/jp.ts`)レイアウトはこちらで変更できます(`app/screens/ErrorScreen`)。もしこのスクリーンを取り除きたい場合は、`app/app.tsx`にある<ErrorBoundary>コンポーネントをチェックしてください",
     reset: "リセット",
-    traceTitle: "エラーのスタック: %{name}", // @demo remove-current-line
+    traceTitle: "エラーのスタック: %{name}",
   },
   emptyStateComponent: {
     generic: {
@@ -30,7 +30,7 @@ const ja: Translations = {
       button: "もう一度やってみよう",
     },
   },
-  // @demo remove-block-start
+
   errors: {
     invalidEmail: "有効なメールアドレスを入力してください.",
   },
@@ -122,9 +122,8 @@ const ja: Translations = {
         "お気に入りのエピソードがまだありません。エピソードにあるハートマークにタップして、お気に入りに追加しましょう！",
     },
   },
-  // @demo remove-block-start
+
   ...demoJa,
-  // @demo remove-block-end
 }
 
 export default ja

@@ -3,8 +3,8 @@ import { ImageStyle, TextStyle, View, ViewStyle } from "react-native"
 
 import { Icon, iconRegistry, type IconTypes } from "@/components/Icon"
 import { Text } from "@/components/Text"
-import type { ThemedStyle } from "@/theme/types"
 import { $styles } from "@/theme/styles"
+import type { ThemedStyle } from "@/theme/types"
 
 import { Demo } from "./types"
 import { DemoUseCase } from "../DemoUseCase"
@@ -111,5 +111,3 @@ export const DemoIcon: Demo = {
     </DemoUseCase>,
   ],
 }
-
-// @demo remove-file

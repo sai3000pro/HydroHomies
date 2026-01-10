@@ -61,7 +61,7 @@
   },
   "extra": {
     "ignite": {
-      "version": "UNKNOWN"
+      "version": "11.4.0"
     }
   }
 }

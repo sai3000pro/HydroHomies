@@ -458,5 +458,3 @@ export const demoEn = {
 
 export default demoEn
 export type DemoTranslations = typeof demoEn
-
-// @demo remove-file

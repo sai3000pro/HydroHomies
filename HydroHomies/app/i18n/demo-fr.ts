@@ -467,5 +467,3 @@ export const demoFr: DemoTranslations = {
 }
 
 export default demoFr
-
-// @demo remove-file

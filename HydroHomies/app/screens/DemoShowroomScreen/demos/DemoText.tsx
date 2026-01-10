@@ -140,5 +140,3 @@ export const DemoText: Demo = {
     </DemoUseCase>,
   ],
 }
-
-// @demo remove-file

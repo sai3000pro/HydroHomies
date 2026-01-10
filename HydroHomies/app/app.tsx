@@ -24,7 +24,7 @@ import * as Linking from "expo-linking"
 import { KeyboardProvider } from "react-native-keyboard-controller"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
-import { AuthProvider } from "./context/AuthContext" // @demo remove-current-line
+import { AuthProvider } from "./context/AuthContext"
 import { initI18n } from "./i18n"
 import { AppNavigator } from "./navigators/AppNavigator"
 import { useNavigationPersistence } from "./navigators/navigationUtilities"
@@ -96,9 +96,7 @@ export function App() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <KeyboardProvider>
-        {/* @demo remove-block-start */}
         <AuthProvider>
-          {/* @demo remove-block-end */}
           <ThemeProvider>
             <AppNavigator
               linking={linking}
@@ -106,9 +104,7 @@ export function App() {
               onStateChange={onNavigationStateChange}
             />
           </ThemeProvider>
-          {/* @demo remove-block-start */}
         </AuthProvider>
-        {/* @demo remove-block-end */}
       </KeyboardProvider>
     </SafeAreaProvider>
   )

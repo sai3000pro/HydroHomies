@@ -74,5 +74,3 @@ export const DemoEmptyState: Demo = {
     </DemoUseCase>,
   ],
 }
-
-// @demo remove-file

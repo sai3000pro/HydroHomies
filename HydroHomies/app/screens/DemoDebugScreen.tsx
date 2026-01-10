@@ -17,9 +17,9 @@ import { Text } from "@/components/Text"
 import { useAuth } from "@/context/AuthContext"
 import { isRTL } from "@/i18n"
 import { DemoTabScreenProps } from "@/navigators/navigationTypes"
-import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
+import type { ThemedStyle } from "@/theme/types"
 
 /**
  * @param {string} url - The URL to open in the browser.
@@ -188,5 +188,3 @@ const $hint: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
   lineHeight: 15,
   paddingBottom: spacing.lg,
 })
-
-// @demo remove-file

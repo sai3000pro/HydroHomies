@@ -8,15 +8,15 @@ import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
 
 import Config from "@/config"
-import { useAuth } from "@/context/AuthContext" // @demo remove-current-line
+import { useAuth } from "@/context/AuthContext"
 import { ErrorBoundary } from "@/screens/ErrorScreen/ErrorBoundary"
-import { LoginScreen } from "@/screens/LoginScreen" // @demo remove-current-line
+import { LoginScreen } from "@/screens/LoginScreen"
 import { WelcomeScreen } from "@/screens/WelcomeScreen"
 import { useAppTheme } from "@/theme/context"
 
-import { DemoNavigator } from "./DemoNavigator" // @demo remove-current-line
-import { navigationRef, useBackButtonHandler } from "./navigationUtilities"
+import { DemoNavigator } from "./DemoNavigator"
 import type { AppStackParamList, NavigationProps } from "./navigationTypes"
+import { navigationRef, useBackButtonHandler } from "./navigationUtilities"
 
 /**
  * This is a list of all the route names that will exit the app if the back button
@@ -28,9 +28,8 @@ const exitRoutes = Config.exitRoutes
 const Stack = createNativeStackNavigator<AppStackParamList>()
 
 const AppStack = () => {
-  // @demo remove-block-start
   const { isAuthenticated } = useAuth()
-  // @demo remove-block-end
+
   const {
     theme: { colors },
   } = useAppTheme()
@@ -44,14 +43,12 @@ const AppStack = () => {
           backgroundColor: colors.background,
         },
       }}
-      initialRouteName={isAuthenticated ? "Welcome" : "Login"} // @demo remove-current-line
+      initialRouteName={isAuthenticated ? "Welcome" : "Login"}
     >
-      {/* @demo remove-block-start */}
       {isAuthenticated ? (
         <>
-          {/* @demo remove-block-end */}
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          {/* @demo remove-block-start */}
+
           <Stack.Screen name="Demo" component={DemoNavigator} />
         </>
       ) : (
@@ -59,7 +56,7 @@ const AppStack = () => {
           <Stack.Screen name="Login" component={LoginScreen} />
         </>
       )}
-      {/* @demo remove-block-end */}
+
       {/** 🔥 Your screens go here */}
       {/* IGNITE_GENERATOR_ANCHOR_APP_STACK_SCREENS */}
     </Stack.Navigator>

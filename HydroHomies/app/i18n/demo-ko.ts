@@ -453,5 +453,3 @@ export const demoKo: DemoTranslations = {
 }
 
 export default demoKo
-
-// @demo remove-file

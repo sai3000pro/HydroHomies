@@ -1,29 +1,26 @@
 import { FC } from "react"
 import { Image, ImageStyle, TextStyle, View, ViewStyle } from "react-native"
 
-import { Button } from "@/components/Button" // @demo remove-current-line
+import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { useAuth } from "@/context/AuthContext" // @demo remove-current-line
+import { useAuth } from "@/context/AuthContext"
 import { isRTL } from "@/i18n"
-import type { AppStackScreenProps } from "@/navigators/navigationTypes" // @demo remove-current-line
-import type { ThemedStyle } from "@/theme/types"
+import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
-import { useHeader } from "@/utils/useHeader" // @demo remove-current-line
+import type { ThemedStyle } from "@/theme/types"
+import { useHeader } from "@/utils/useHeader"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 
 const welcomeLogo = require("@assets/images/logo.png")
 const welcomeFace = require("@assets/images/welcome-face.png")
 
-interface WelcomeScreenProps extends AppStackScreenProps<"Welcome"> {} // @demo remove-current-line
+interface WelcomeScreenProps extends AppStackScreenProps<"Welcome"> {}
 
-// @demo replace-next-line export const WelcomeScreen: FC = function WelcomeScreen(
-export const WelcomeScreen: FC<WelcomeScreenProps> = function WelcomeScreen(
-  _props, // @demo remove-current-line
-) {
+export const WelcomeScreen: FC<WelcomeScreenProps> = function WelcomeScreen(_props) {
   const { themed, theme } = useAppTheme()
-  // @demo remove-block-start
+
   const { navigation } = _props
   const { logout } = useAuth()
 
@@ -38,7 +35,6 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = function WelcomeScreen(
     },
     [logout],
   )
-  // @demo remove-block-end
 
   const $bottomContainerInsets = useSafeAreaInsetsStyle(["bottom"])
 
@@ -63,14 +59,13 @@ export const WelcomeScreen: FC<WelcomeScreenProps> = function WelcomeScreen(
 
       <View style={themed([$bottomContainer, $bottomContainerInsets])}>
         <Text tx="welcomeScreen:postscript" size="md" />
-        {/* @demo remove-block-start */}
+
         <Button
           testID="next-screen-button"
           preset="reversed"
           tx="welcomeScreen:letsGo"
           onPress={goNext}
         />
-        {/* @demo remove-block-end */}
       </View>
     </Screen>
   )

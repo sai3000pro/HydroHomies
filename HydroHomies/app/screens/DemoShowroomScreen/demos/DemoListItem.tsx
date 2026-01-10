@@ -6,8 +6,8 @@ import { Icon } from "@/components/Icon"
 import { ListItem } from "@/components/ListItem"
 import { Text } from "@/components/Text"
 import { translate } from "@/i18n/translate"
-import type { ThemedStyle } from "@/theme/types"
 import { $styles } from "@/theme/styles"
+import type { ThemedStyle } from "@/theme/types"
 
 import { DemoDivider } from "../DemoDivider"
 import { Demo } from "./types"
@@ -214,5 +214,3 @@ export const DemoListItem: Demo = {
     </DemoUseCase>,
   ],
 }
-
-// @demo remove-file
