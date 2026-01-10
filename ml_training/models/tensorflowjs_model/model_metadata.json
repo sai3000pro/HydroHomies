@@ -1,0 +1,10 @@
+{
+  "input_size": 224,
+  "classes": [
+    "half",
+    "full",
+    "overflowing"
+  ],
+  "num_classes": 3,
+  "model_type": "MobileNetV2"
+}
