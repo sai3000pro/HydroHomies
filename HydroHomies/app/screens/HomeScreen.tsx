@@ -8,7 +8,12 @@ import type { ThemedStyle } from "@/theme/types"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { Pet } from "@/components/Pet"
 import { useAuth } from "@/context/AuthContext"
-import { databaseService, type UserProfile, type PetState, type HydrationEntry } from "@/services/firebase/database"
+import {
+  databaseService,
+  type UserProfile,
+  type PetState,
+  type HydrationEntry,
+} from "@/services/firebase/database"
 import { authService } from "@/services/firebase/auth"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore"
@@ -116,14 +121,21 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       preset="scroll"
       contentContainerStyle={themed($screenContentContainer)}
       refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.palette.accent500} />
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor={theme.colors.palette.accent500}
+        />
       }
     >
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={themed($header)}>
           <Text preset="heading" text="HydroHype 💧" />
-          <Text size="md" text={`Welcome back, ${userProfile?.displayName || user?.email || "User"}!`} />
+          <Text
+            size="md"
+            text={`Welcome back, ${userProfile?.displayName || user?.email || "User"}!`}
+          />
         </View>
 
         {/* Pet Display */}
@@ -136,10 +148,13 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
         {/* Hydration Progress */}
         <View style={themed($progressSection)}>
           <Text preset="subheading" text="Today's Progress" style={themed($sectionTitle)} />
-          
+
           {shouldFlag && (
             <View style={themed($warningBanner)}>
-              <Text text="⚠️ You're drinking a lot today! Stay safe." style={themed($warningText)} />
+              <Text
+                text="⚠️ You're drinking a lot today! Stay safe."
+                style={themed($warningText)}
+              />
             </View>
           )}
 
@@ -167,7 +182,11 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
               <Text size="xs" text={`${progress}% Complete`} style={themed($progressText)} />
             </View>
 
-            <Text size="sm" text={`${dailyGoal - todayIntake}ml remaining`} style={themed($remainingText)} />
+            <Text
+              size="sm"
+              text={`${dailyGoal - todayIntake}ml remaining`}
+              style={themed($remainingText)}
+            />
           </View>
         </View>
 

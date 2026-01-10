@@ -258,7 +258,10 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
 
             {!isProcessing && estimatedVolume && (
               <View style={themed($detectionInfo)}>
-                <Text preset="subheading" text={isVerification ? "Empty Bottle Detected" : "Bottle Detected"} />
+                <Text
+                  preset="subheading"
+                  text={isVerification ? "Empty Bottle Detected" : "Bottle Detected"}
+                />
                 {bottleType && <Text text={`Type: ${bottleType}`} />}
                 <Text preset="heading" text={`Volume: ${estimatedVolume}ml`} />
               </View>
@@ -272,8 +275,17 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
             onCameraReady={() => console.log("Camera ready")}
           >
             <View style={themed($cameraOverlay)}>
-              <Text preset="heading" text={isVerification ? "Scan Empty Bottle" : "Scan Your Bottle"} />
-              <Text text={isVerification ? "Take a photo showing the bottle is empty" : "Point camera at your water bottle"} />
+              <Text
+                preset="heading"
+                text={isVerification ? "Scan Empty Bottle" : "Scan Your Bottle"}
+              />
+              <Text
+                text={
+                  isVerification
+                    ? "Take a photo showing the bottle is empty"
+                    : "Point camera at your water bottle"
+                }
+              />
             </View>
           </CameraView>
         )}

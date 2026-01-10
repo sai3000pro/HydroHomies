@@ -37,7 +37,7 @@ export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ childre
         setUser(firebaseUser)
         if (firebaseUser) {
           setAuthEmail(firebaseUser.email || "")
-          
+
           // Ensure user profile exists
           try {
             const profile = await databaseService.getUserProfile(firebaseUser.uid)

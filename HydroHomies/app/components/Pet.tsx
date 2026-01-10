@@ -17,7 +17,7 @@ export const Pet: FC<PetProps> = ({ pet, size = "medium" }) => {
   useEffect(() => {
     // Map pet type and health to emoji representation
     const healthEmoji = pet.health > 70 ? "😊" : pet.health > 40 ? "😐" : "😢"
-    
+
     switch (pet.type) {
       case "seed":
         setPetEmoji(pet.health > 70 ? "🌱" : "🥀")

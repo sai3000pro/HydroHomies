@@ -1,15 +1,16 @@
 import { FC, useEffect, useState } from "react"
 import { View, ViewStyle, TextStyle, FlatList, RefreshControl, Pressable } from "react-native"
-import { Text } from "@/components/Text"
-import { Screen } from "@/components/Screen"
+import { collection, query, where, onSnapshot, Timestamp, getDocs } from "firebase/firestore"
+
 import { Pet } from "@/components/Pet"
+import { Screen } from "@/components/Screen"
+import { Text } from "@/components/Text"
+import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import { authService } from "@/services/firebase/auth"
+import { db } from "@/services/firebase/config"
+import { databaseService, type LeaderboardEntry, type PetState } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { databaseService, type LeaderboardEntry, type PetState } from "@/services/firebase/database"
-import { authService } from "@/services/firebase/auth"
-import { collection, query, where, onSnapshot, Timestamp, getDocs } from "firebase/firestore"
-import { db } from "@/services/firebase/config"
 
 interface LeaderboardScreenProps extends AppStackScreenProps<"Leaderboard"> {}
 
@@ -36,7 +37,7 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
     // Subscribe to all users for leaderboard
     // In production, you'd maintain a daily summary collection for better performance
     const usersRef = collection(db, "users")
-    
+
     return onSnapshot(usersRef, async (snapshot) => {
       const leaderboardItems: LeaderboardItem[] = []
 
@@ -61,7 +62,7 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
 
         const hydrationEntries = entriesSnapshot.docs.map((doc) => doc.data())
         const totalHydration = hydrationEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
-        
+
         const dailyGoal = userData.stats?.dailyWaterGoal || 2500
         const percentageOfGoal = dailyGoal > 0 ? Math.round((totalHydration / dailyGoal) * 100) : 0
 
@@ -189,7 +190,11 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
         <Text size="md" text="Today's Top Hydrators" />
         {currentUserRank && (
           <View style={themed($userRankBanner)}>
-            <Text preset="bold" text={`Your Rank: #${currentUserRank}`} style={themed($userRankText)} />
+            <Text
+              preset="bold"
+              text={`Your Rank: #${currentUserRank}`}
+              style={themed($userRankText)}
+            />
           </View>
         )}
       </View>

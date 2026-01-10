@@ -3,6 +3,7 @@
 ## Prerequisites Check
 
 Before running, ensure you have:
+
 - ✅ Node.js >= 20.0.0 (`node --version`)
 - ✅ npm or yarn installed
 - ✅ Firebase project set up (see Step 2 below)
@@ -35,6 +36,7 @@ const firebaseConfig = {
 ```
 
 **To get your Firebase credentials:**
+
 - Go to [Firebase Console](https://console.firebase.google.com/)
 - Create a new project (or select existing)
 - Go to Project Settings > General
@@ -42,6 +44,7 @@ const firebaseConfig = {
 - Copy the config values
 
 **Enable Firebase services:**
+
 - Authentication: Go to Authentication > Sign-in method > Enable Email/Password
 - Firestore: Go to Firestore Database > Create database (start in test mode)
 
@@ -64,34 +67,42 @@ npm start
 ```
 
 Then:
+
 - Press `i` for iOS Simulator
-- Press `a` for Android Emulator  
+- Press `a` for Android Emulator
 - Scan QR code with Expo Go app on your phone
 - Press `w` for web browser
 
 #### Option B: Platform-Specific Commands
 
 **iOS (Mac only):**
+
 ```bash
 npm run ios
 ```
+
 This will automatically open the iOS Simulator.
 
 **Android:**
+
 ```bash
 npm run android
 ```
+
 This will automatically open the Android Emulator (if running) or prompt you to start one.
 
 **Web:**
+
 ```bash
 npm run web
 ```
+
 Opens the app in your default browser (limited functionality - camera won't work).
 
 ### 5. First Run Setup
 
 When the app starts:
+
 1. **Login Screen**: Create an account by entering email and password (it will auto-create if user doesn't exist)
 2. **Onboarding**: Enter your stats (Height, Weight, Age, Activity Level)
 3. **Home Screen**: You'll see your pet and hydration dashboard
@@ -99,25 +110,30 @@ When the app starts:
 ## Troubleshooting
 
 ### "Firebase: Error (auth/invalid-api-key)"
+
 - Make sure you've configured Firebase credentials in `app/services/firebase/config.ts`
 - Verify your Firebase project is active
 
 ### "Camera permission denied"
+
 - iOS: Settings > Privacy & Security > Camera > Allow HydroHype
 - Android: App Info > Permissions > Camera > Allow
 
 ### "Network request failed" or Firebase connection errors
+
 - Check your internet connection
 - Verify Firebase project is active in Firebase Console
 - Check Firestore security rules (they should allow authenticated users)
 
 ### Metro bundler won't start
+
 ```bash
 # Clear cache and restart
 npm start -- --clear
 ```
 
 ### Dependencies issues
+
 ```bash
 # Clean install
 rm -rf node_modules package-lock.json
@@ -125,6 +141,7 @@ npm install
 ```
 
 ### TypeScript errors
+
 ```bash
 # Check for type errors
 npm run compile
@@ -133,10 +150,12 @@ npm run compile
 ## Development Workflow
 
 ### Hot Reload
+
 - The app automatically reloads when you save files
 - Shake your device/simulator to open developer menu
 
 ### Debugging
+
 - Chrome DevTools: `Cmd+D` (iOS) or `Cmd+M` (Android) > "Debug"
 - Reactotron: Available in dev mode (see console for connection)
 - Logs: Check terminal where `npm start` is running
@@ -144,11 +163,13 @@ npm run compile
 ### Building for Production
 
 **iOS:**
+
 ```bash
 npm run build:ios:prod
 ```
 
 **Android:**
+
 ```bash
 npm run build:android:prod
 ```
@@ -173,6 +194,7 @@ For production, use environment variables instead of hardcoding Firebase config:
 
 1. Install `expo-constants` (already installed)
 2. Create `.env` file in project root:
+
 ```
 EXPO_PUBLIC_FIREBASE_API_KEY=your-api-key
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
@@ -181,6 +203,7 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
 ```
+
 3. Update `app/services/firebase/config.ts` to use `process.env.EXPO_PUBLIC_*`
 
 ## Testing the App Flow

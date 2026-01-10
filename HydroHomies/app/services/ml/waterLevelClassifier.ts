@@ -1,14 +1,14 @@
 /**
  * ML Model for Water Level Classification
- * 
+ *
  * This is a placeholder for the actual ML model that will:
  * 1. Classify water level in bottle (Full, Half, Low, Empty)
  * 2. Detect bottle type from label/text recognition
  * 3. Estimate volume based on bottle dimensions and water level
- * 
+ *
  * The model will use the dataset from:
  * https://www.kaggle.com/datasets/chethuhn/water-bottle-dataset
- * 
+ *
  * To integrate the actual model:
  * 1. Download the dataset using: kagglehub.dataset_download("chethuhn/water-bottle-dataset")
  * 2. Train a model (e.g., using TensorFlow Lite, PyTorch Mobile, or ML Kit)
@@ -67,7 +67,7 @@ export async function detectBottleLabel(imageUri: string): Promise<BottleType | 
   // - @react-native-ml-kit/text-recognition
   // - Google Cloud Vision API
   // - AWS Textract
-  
+
   // For now, return null to fall back to visual estimation
   return null
 }
@@ -82,7 +82,7 @@ export async function searchBottleType(query: string): Promise<BottleType | null
   // - Google Custom Search API
   // - Product databases (e.g., Open Food Facts API)
   // - Custom bottle database
-  
+
   return null
 }
 
@@ -98,7 +98,7 @@ export async function estimateVolumeFromDimensions(
   // TODO: Implement volume estimation based on pixel dimensions
   // Would need calibration with known reference objects
   // Could use ARKit/ARCore for more accurate measurements
-  
+
   // Placeholder: return average bottle size
   return 500 // ml
 }
@@ -111,7 +111,7 @@ export async function preprocessImage(imageUri: string): Promise<string> {
   // - Resize to model input size (e.g., 224x224 or 416x416)
   // - Normalize pixel values
   // - Convert to appropriate format (RGB, grayscale, etc.)
-  
+
   return imageUri
 }
 
@@ -123,7 +123,7 @@ export async function loadMLModel(): Promise<void> {
   // Example with TensorFlow.js:
   // const model = await tf.loadLayersModel(bundleResourceIO('model.json'))
   // return model
-  
+
   console.log("ML Model loading placeholder - implement actual model loading")
 }
 
@@ -134,6 +134,6 @@ export async function unloadMLModel(): Promise<void> {
   // TODO: Clean up model resources
   // Example with TensorFlow.js:
   // model.dispose()
-  
+
   console.log("ML Model unloading placeholder - implement actual model cleanup")
 }
