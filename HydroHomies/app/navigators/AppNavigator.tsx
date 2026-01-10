@@ -10,16 +10,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack"
 import Config from "@/config"
 import { useAuth } from "@/context/AuthContext"
 import { ErrorBoundary } from "@/screens/ErrorScreen/ErrorBoundary"
-import { LoginScreen } from "@/screens/LoginScreen"
-import { WelcomeScreen } from "@/screens/WelcomeScreen"
-import { OnboardingScreen } from "@/screens/OnboardingScreen"
-import { HomeScreen } from "@/screens/HomeScreen"
-import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
-import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
 import { FriendPetScreen } from "@/screens/FriendPetScreen"
+import { HomeScreen } from "@/screens/HomeScreen"
+import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
+import { LoginScreen } from "@/screens/LoginScreen"
+import { OnboardingScreen } from "@/screens/OnboardingScreen"
+import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
 import { useAppTheme } from "@/theme/context"
 
-import { DemoNavigator } from "./DemoNavigator"
 import type { AppStackParamList, NavigationProps } from "./navigationTypes"
 import { navigationRef, useBackButtonHandler } from "./navigationUtilities"
 
@@ -57,8 +55,6 @@ const AppStack = () => {
           <Stack.Screen name="ScanBottle" component={ScanBottleScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="FriendPet" component={FriendPetScreen} />
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="Demo" component={DemoNavigator} />
         </>
       ) : (
         <>
