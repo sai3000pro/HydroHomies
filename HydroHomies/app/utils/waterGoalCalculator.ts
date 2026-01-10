@@ -7,25 +7,43 @@ export interface UserStats {
   height: number // in cm
   weight: number // in kg
   age: number
+  sex: string
   activityLevel: "low" | "moderate" | "high" | "very_high"
 }
 
 export function calculateDailyWaterGoal(stats: UserStats): number {
-  const { weight, activityLevel } = stats
+  const { height, weight, age, sex, activityLevel } = stats
 
-  // Base calculation: weight in kg × 35 ml per kg
-  let baseWater = weight * 35
+  // calculate body surface area (Du Bois formula)
+  const bodySurfaceArea = 0.007184 * Math.pow(weight, 0.425) * Math.pow(height, 0.725)
+
+  // basal metabolic rate
+  const basalMetabolicRate = 10 * weight + 6.25 * height - 5 * age + (sex === "male" ? 5 : -161)
 
   // Activity level multipliers
   const activityMultipliers = {
-    low: 1.0,
-    moderate: 1.2,
-    high: 1.5,
-    very_high: 1.8,
+    low: 1.2,
+    moderate: 1.55,
+    high: 1.725,
+    very_high: 1.9,
   }
 
-  const multiplier = activityMultipliers[activityLevel]
-  const dailyGoal = Math.round(baseWater * multiplier)
+  // total daily energy expenditure
+  const totalDailyEnergyExpenditure = basalMetabolicRate * activityMultipliers[activityLevel]
+
+  const urine = 1500 // Set value
+  const faeces = 150 // Set value
+  const skinEvap = 400 * bodySurfaceArea // Loss via BSA
+  const respiratory = totalDailyEnergyExpenditure * 0.13 // Loss via Calories
+  const sweat = activityMultipliers[activityLevel] > 1.2 ? totalDailyEnergyExpenditure * 0.1 : 100 // Estimate: more activity = more sweat
+
+  const metabolicGain = totalDailyEnergyExpenditure * 0.13 // Gain via Calories
+
+  // Final Calculation
+  const totalLoss = urine + faeces + skinEvap + respiratory + sweat
+  const totalGain = metabolicGain
+
+  const dailyGoal = Math.round(totalLoss - totalGain)
 
   // Minimum 1.5L, Maximum 5L (reasonable bounds)
   return Math.max(1500, Math.min(5000, dailyGoal))
