@@ -73,6 +73,9 @@ bin/Exponent.app
 expo-env.d.ts
 
 ## Secrets
+.env
+.env.local
+.env.*.local
 npm-debug.*
 *.jks
 *.p8

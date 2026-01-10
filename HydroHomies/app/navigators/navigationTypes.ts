@@ -19,6 +19,18 @@ export type DemoTabParamList = {
 export type AppStackParamList = {
   Welcome: undefined
   Login: undefined
+  Onboarding: undefined
+  Home: undefined
+  ScanBottle: {
+    mode?: "initial" | "verification"
+    initialImageUri?: string
+    estimatedVolume?: number
+  }
+  Leaderboard: undefined
+  FriendPet: {
+    userId: string
+    displayName: string
+  }
   Demo: NavigatorScreenParams<DemoTabParamList>
   // 🔥 Your screens go here
   // IGNITE_GENERATOR_ANCHOR_APP_STACK_PARAM_LIST

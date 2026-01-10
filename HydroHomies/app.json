@@ -1,7 +1,7 @@
 {
-  "name": "HydroHomies",
-  "slug": "HydroHomies",
-  "scheme": "hydrohomies",
+  "name": "HydroHype",
+  "slug": "HydroHype",
+  "scheme": "hydrohype",
   "version": "1.0.0",
   "orientation": "portrait",
   "userInterfaceStyle": "automatic",
@@ -16,18 +16,26 @@
   ],
   "android": {
     "icon": "./assets/images/app-icon-android-legacy.png",
-    "package": "com.hydrohomies",
+    "package": "com.hydrohype",
     "adaptiveIcon": {
       "foregroundImage": "./assets/images/app-icon-android-adaptive-foreground.png",
       "backgroundImage": "./assets/images/app-icon-android-adaptive-background.png"
     },
     "allowBackup": false,
-    "edgeToEdgeEnabled": true
+    "edgeToEdgeEnabled": true,
+    "permissions": [
+      "CAMERA",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE"
+    ]
   },
   "ios": {
     "icon": "./assets/images/app-icon-ios.png",
     "supportsTablet": true,
-    "bundleIdentifier": "com.hydrohomies"
+    "bundleIdentifier": "com.hydrohype",
+    "infoPlist": {
+      "NSCameraUsageDescription": "HydroHype needs camera access to scan water bottles and verify your hydration."
+    }
   },
   "web": {
     "favicon": "./assets/images/app-icon-web-favicon.png",
@@ -52,6 +60,12 @@
           "parentTheme": "Light",
           "enforceNavigationBarContrast": false
         }
+      }
+    ],
+    [
+      "expo-camera",
+      {
+        "cameraPermission": "Allow HydroHype to access your camera to scan water bottles and verify hydration."
       }
     ],
     "expo-build-properties"
