@@ -3,6 +3,7 @@
 ## 🎯 Project Overview
 
 HydroHype is a mobile application that gamifies hydration by combining:
+
 - **Computer Vision**: Automatic water bottle detection and level classification
 - **Social Competition**: Real-time leaderboards
 - **Virtual Pet**: Tamagotchi-style pet that grows with hydration
@@ -84,14 +85,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
-    
+
     // Users can create hydration entries, read their own
     match /hydrationEntries/{entryId} {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow read: if request.auth != null && (resource.data.userId == request.auth.uid || request.query.limit <= 10);
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
-    
+
     // Users can read/write their own pet
     match /pets/{userId} {
       allow read: if request.auth != null;
@@ -119,6 +120,7 @@ Scan the QR code with Expo Go app on your device, or press `i` for iOS simulator
 The app currently uses placeholder functions for bottle detection and water level classification. To integrate the actual ML model:
 
 1. **Download the Dataset:**
+
    ```python
    import kagglehub
    path = kagglehub.dataset_download("chethuhn/water-bottle-dataset")
@@ -189,17 +191,20 @@ app/
 ## 🔧 Troubleshooting
 
 ### Camera Permission Issues
+
 - iOS: Check Info.plist has `NSCameraUsageDescription`
 - Android: Check AndroidManifest.xml has camera permission
 - Both are configured in `app.json`
 
 ### Firebase Connection Issues
+
 - Verify Firebase config values are correct
 - Check Firebase project is active
 - Ensure Authentication is enabled
 - Verify Firestore database is created
 
 ### Build Errors
+
 - Clear cache: `expo start -c`
 - Reinstall dependencies: `rm -rf node_modules && npm install`
 - Check Node.js version: `node --version` (should be >= 20.0.0)

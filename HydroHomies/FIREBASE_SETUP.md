@@ -5,6 +5,7 @@ This guide will walk you through creating and configuring a Firebase project for
 ## 📋 Quick Summary
 
 If you already have a Firebase project, you just need to:
+
 1. Enable Email/Password Authentication
 2. Create Firestore Database
 3. Update `app/services/firebase/config.ts` with your config values
@@ -50,8 +51,8 @@ If you're starting fresh, follow all steps below.
        storageBucket: "hydrohype-9fa73.firebasestorage.app",
        messagingSenderId: "1035226290940",
        appId: "1:1035226290940:web:7db3946b1d05691f471579",
-       measurementId: "G-S1ZDRME8HR" // Optional, only if Analytics is enabled
-     };
+       measurementId: "G-S1ZDRME8HR", // Optional, only if Analytics is enabled
+     }
      ```
    - **Copy these values** - you'll need them in Step 5
 
@@ -109,14 +110,14 @@ If you're starting fresh, follow all steps below.
          allow read: if request.auth != null;
          allow write: if request.auth != null && request.auth.uid == userId;
        }
-       
+
        // Users can create hydration entries, read their own and limited leaderboard reads
        match /hydrationEntries/{entryId} {
          allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
          allow read: if request.auth != null && (resource.data.userId == request.auth.uid || request.query.limit <= 10);
          allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
        }
-       
+
        // Users can read/write their own pet
        match /pets/{userId} {
          allow read: if request.auth != null;
@@ -148,6 +149,7 @@ If you're starting fresh, follow all steps below.
    ```
 
 3. **Example with Real Values** (your project):
+
    ```typescript
    const firebaseConfig = {
      apiKey: "AIzaSyASVhkeR4SIlgTpQUfDUeTkEeRBwvM4awc",
@@ -181,6 +183,7 @@ If you're starting fresh, follow all steps below.
 For production, use environment variables instead of hardcoding:
 
 1. **Create `.env` file** in project root:
+
    ```
    EXPO_PUBLIC_FIREBASE_API_KEY=AIzaSyASVhkeR4SIlgTpQUfDUeTkEeRBwvM4awc
    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=hydrohype-9fa73.firebaseapp.com
@@ -191,6 +194,7 @@ For production, use environment variables instead of hardcoding:
    ```
 
 2. **Update `config.ts`** to use environment variables:
+
    ```typescript
    const firebaseConfig = {
      apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "your-api-key",
@@ -204,26 +208,31 @@ For production, use environment variables instead of hardcoding:
 ## Troubleshooting
 
 ### "Firebase is not configured" warning still shows
+
 - Make sure you've saved the config file
 - Restart your dev server: `npm start -- --clear`
 - Check that all values are replaced (not placeholder values)
 
 ### "auth/operation-not-allowed" error
+
 - Go to Firebase Console → Authentication → Sign-in method
 - Make sure Email/Password is **Enabled** (toggle ON)
 - Click **Save**
 
 ### "Permission denied" in Firestore
+
 - Check Firestore security rules are published
 - Make sure you're logged in (Authentication is working)
 - Verify the rules match the structure above
 
 ### Can't create database
+
 - Make sure you're on the Blaze plan (pay-as-you-go) OR
 - Use the free Spark plan (which should work for development)
 - Some features require Blaze plan (but basic Firestore works on Spark)
 
 ### Config values not working
+
 - Double-check you copied the values correctly (no extra spaces)
 - Make sure you're using the **Web app** config (not iOS/Android)
 - Verify the project ID matches in all fields
@@ -242,6 +251,7 @@ For production, use environment variables instead of hardcoding:
 ## Next Steps
 
 Once Firebase is set up:
+
 1. ✅ Try logging in - it should create accounts automatically
 2. ✅ Complete onboarding to set up your profile
 3. ✅ Test the app features
@@ -257,6 +267,7 @@ Once Firebase is set up:
 ## Support
 
 If you encounter issues:
+
 1. Check Firebase Console for error messages
 2. Check browser console for detailed errors
 3. Verify all steps were completed

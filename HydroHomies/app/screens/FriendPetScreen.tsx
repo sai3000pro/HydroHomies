@@ -1,5 +1,12 @@
 import { FC, useEffect, useState } from "react"
-import { View, ViewStyle, TextStyle, ScrollView, RefreshControl, ActivityIndicator } from "react-native"
+import {
+  View,
+  ViewStyle,
+  TextStyle,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+} from "react-native"
 import { Text } from "@/components/Text"
 import { Screen } from "@/components/Screen"
 import { Pet } from "@/components/Pet"
@@ -89,7 +96,7 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
 
             <View style={themed($statsSection)}>
               <Text preset="subheading" text="Pet Stats" style={themed($sectionTitle)} />
-              
+
               <View style={themed($statRow)}>
                 <Text preset="bold" text="Level:" />
                 <Text text={`${pet.level}`} style={themed($statValue)} />

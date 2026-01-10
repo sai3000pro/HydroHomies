@@ -56,10 +56,7 @@ export function calculatePetHealth(lastFed: Date, currentHealth: number): number
 /**
  * Adds experience to pet based on water intake
  */
-export function addHydrationExperience(
-  currentExperience: number,
-  waterAmountMl: number,
-): number {
+export function addHydrationExperience(currentExperience: number, waterAmountMl: number): number {
   const experienceGain = Math.floor((waterAmountMl / 100) * EXPERIENCE_PER_100ML)
   return currentExperience + experienceGain
 }

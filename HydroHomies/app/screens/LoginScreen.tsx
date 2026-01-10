@@ -9,10 +9,10 @@ import { Text } from "@/components/Text"
 import { TextField, type TextFieldAccessoryProps } from "@/components/TextField"
 import { useAuth } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { useAppTheme } from "@/theme/context"
-import type { ThemedStyle } from "@/theme/types"
 import { authService } from "@/services/firebase/auth"
 import { isFirebaseConfigured } from "@/services/firebase/config"
+import { useAppTheme } from "@/theme/context"
+import type { ThemedStyle } from "@/theme/types"
 
 interface LoginScreenProps extends AppStackScreenProps<"Login"> {}
 
@@ -44,7 +44,7 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
     console.log("Email:", authEmail)
     console.log("Password length:", authPassword.length)
     console.log("Validation error:", validationError)
-    
+
     setIsSubmitted(true)
     setAttemptsCount(attemptsCount + 1)
 
@@ -62,12 +62,12 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
       Alert.alert(
         "Firebase Not Configured",
         "Please configure Firebase before using the app.\n\n" +
-        "1. Go to Firebase Console: https://console.firebase.google.com/\n" +
-        "2. Create/select a project\n" +
-        "3. Enable Authentication (Email/Password)\n" +
-        "4. Create Firestore Database\n" +
-        "5. Copy your config to: app/services/firebase/config.ts\n\n" +
-        "See SETUP.md for detailed instructions."
+          "1. Go to Firebase Console: https://console.firebase.google.com/\n" +
+          "2. Create/select a project\n" +
+          "3. Enable Authentication (Email/Password)\n" +
+          "4. Create Firestore Database\n" +
+          "5. Copy your config to: app/services/firebase/config.ts\n\n" +
+          "See SETUP.md for detailed instructions.",
       )
       setIsSubmitted(false)
       setIsLoading(false)
@@ -98,11 +98,14 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
     } catch (error: any) {
       console.error("Login error:", error)
       let errorMessage = "Failed to sign in. Please try again."
-      
+
       // Check if Firebase is configured
       if (error.code === "auth/invalid-api-key" || error.message?.includes("API key")) {
-        errorMessage = "Firebase is not configured. Please check your Firebase config in app/services/firebase/config.ts"
-        console.error("Firebase Configuration Error: Please set your Firebase credentials in app/services/firebase/config.ts")
+        errorMessage =
+          "Firebase is not configured. Please check your Firebase config in app/services/firebase/config.ts"
+        console.error(
+          "Firebase Configuration Error: Please set your Firebase credentials in app/services/firebase/config.ts",
+        )
         if (typeof window !== "undefined") {
           alert(errorMessage)
         } else {
@@ -112,7 +115,7 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
         setIsSubmitted(false)
         return
       }
-      
+
       // Handle different Firebase auth error codes
       if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") {
         // User doesn't exist or invalid credentials - try to create account
@@ -131,13 +134,19 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
           console.error("Sign up error:", signUpError)
           if (signUpError.code === "auth/email-already-in-use") {
             // User exists but password was wrong
-            errorMessage = "This email is already registered. The password you entered is incorrect. Please check your password or use 'Forgot Password' if needed."
+            errorMessage =
+              "This email is already registered. The password you entered is incorrect. Please check your password or use 'Forgot Password' if needed."
           } else if (signUpError.code === "auth/operation-not-allowed") {
-            errorMessage = "Email/Password authentication is not enabled in Firebase. Please enable it in Firebase Console > Authentication > Sign-in method > Email/Password."
-          } else if (signUpError.code === "auth/invalid-api-key" || signUpError.message?.includes("API key")) {
+            errorMessage =
+              "Email/Password authentication is not enabled in Firebase. Please enable it in Firebase Console > Authentication > Sign-in method > Email/Password."
+          } else if (
+            signUpError.code === "auth/invalid-api-key" ||
+            signUpError.message?.includes("API key")
+          ) {
             errorMessage = "Firebase is not configured. Please check your Firebase config."
           } else if (signUpError.code === "auth/weak-password") {
-            errorMessage = "Password is too weak. Please use a stronger password (at least 6 characters)."
+            errorMessage =
+              "Password is too weak. Please use a stronger password (at least 6 characters)."
           } else if (signUpError.code === "auth/invalid-email") {
             errorMessage = "Invalid email address format. Please enter a valid email."
           } else {
@@ -191,18 +200,18 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
     >
       <Text testID="login-heading" tx="loginScreen:logIn" preset="heading" style={themed($logIn)} />
       <Text tx="loginScreen:enterDetails" preset="subheading" style={themed($enterDetails)} />
-      
+
       {!isFirebaseConfigured && (
         <View style={themed($configWarning)}>
           <Text preset="bold" text="⚠️ Firebase Not Configured" style={themed($warningTitle)} />
-          <Text 
-            size="sm" 
-            text="Please configure Firebase before using the app. See SETUP.md for instructions." 
-            style={themed($warningText)} 
+          <Text
+            size="sm"
+            text="Please configure Firebase before using the app. See SETUP.md for instructions."
+            style={themed($warningText)}
           />
         </View>
       )}
-      
+
       {attemptsCount > 2 && (
         <Text tx="loginScreen:hint" size="sm" weight="light" style={themed($hint)} />
       )}
@@ -251,7 +260,7 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
         }}
         disabled={isLoading}
       />
-      
+
       {/* Debug info - remove in production */}
       {__DEV__ && (
         <View style={themed($debugInfo)}>

@@ -8,13 +8,14 @@ const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyASVhkeR4SIlgTpQUfDUeTkEeRBwvM4awc",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "hydrohype-9fa73.firebaseapp.com",
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "hydrohype-9fa73",
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "hydrohype-9fa73.firebasestorage.app",
+  storageBucket:
+    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "hydrohype-9fa73.firebasestorage.app",
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1035226290940",
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:1035226290940:web:7db3946b1d05691f471579",
 }
 
 // Check if Firebase is configured (not using placeholder values)
-const isFirebaseConfigured = 
+const isFirebaseConfigured =
   firebaseConfig.apiKey &&
   firebaseConfig.apiKey !== "your-api-key" &&
   firebaseConfig.projectId &&
@@ -25,8 +26,8 @@ const isFirebaseConfigured =
 if (!isFirebaseConfigured && __DEV__) {
   console.warn(
     "⚠️ Firebase is not configured!\n" +
-    "Please update app/services/firebase/config.ts with your Firebase credentials.\n" +
-    "Get them from: https://console.firebase.google.com/ -> Project Settings -> General"
+      "Please update app/services/firebase/config.ts with your Firebase credentials.\n" +
+      "Get them from: https://console.firebase.google.com/ -> Project Settings -> General",
   )
 }
 
