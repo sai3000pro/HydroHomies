@@ -170,8 +170,10 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         return
       }
 
-      // Use override volume if provided, otherwise use estimated volume from state, or fall back to route params
-      const volumeToLog = overrideVolume ?? estimatedVolume ?? route.params?.estimatedVolume ?? 0
+      // Use override volume if provided
+      // In verification mode, use the volume from the initial scan (route params)
+      // Otherwise, use current estimated volume or fall back to route params
+      const volumeToLog = overrideVolume ?? (isVerification ? route.params?.estimatedVolume : estimatedVolume) ?? route.params?.estimatedVolume ?? 0
 
       if (volumeToLog === 0) {
         Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
@@ -212,44 +214,26 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         await databaseService.updatePet(user.uid, petUpdates)
       }
 
-      Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`, [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ])
+      // Navigate to Home screen first
+      setIsProcessing(false)
+      navigation.navigate("Home")
+      
+      // Show success alert after a short delay to ensure navigation completes
+      setTimeout(() => {
+        Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`)
+      }, 300)
     } catch (error) {
       console.error("Error completing hydration entry:", error)
-      Alert.alert("Error", "Failed to log hydration. Please try again.")
-    } finally {
       setIsProcessing(false)
+      
+      // Navigate to Home screen even on error
+      navigation.navigate("Home")
+      
+      // Show error alert after navigation
+      setTimeout(() => {
+        Alert.alert("Error", "Failed to log hydration. Please try again.")
+      }, 300)
     }
-  }
-
-  const handleSkipVerification = () => {
-    Alert.alert(
-      "Skip Verification?",
-      "Verification helps prevent cheating. Are you sure you want to skip?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Skip",
-          onPress: () => {
-            // Use the estimated volume from route params (from initial scan)
-            // If not available, use current estimatedVolume or default to 0
-            const volumeToUse = route.params?.estimatedVolume || estimatedVolume || 0
-            
-            if (volumeToUse === 0) {
-              Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
-              return
-            }
-            
-            // Pass the volume directly to completeHydrationEntry to avoid state update timing issues
-            completeHydrationEntry(volumeToUse)
-          },
-        },
-      ],
-    )
   }
 
   if (!permission) {
@@ -350,14 +334,6 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                 />
               )}
             </View>
-            {isVerification && (
-              <Button
-                text="Skip Verification"
-                onPress={handleSkipVerification}
-                style={themed($skipButton)}
-                preset="reversed"
-              />
-            )}
           </>
         ) : (
           <>
@@ -459,6 +435,3 @@ const $button: ThemedStyle<ViewStyle> = () => ({
   flex: 1,
 })
 
-const $skipButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginTop: spacing.xs,
-})
