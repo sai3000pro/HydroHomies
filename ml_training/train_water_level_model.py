@@ -309,7 +309,7 @@ def train_model(model, X_train, y_train, X_val, y_val):
 
 
 def convert_to_tensorflowjs(model, output_dir: Path):
-    """Convert Keras model to TensorFlow.js format"""
+    """Convert Keras model to TensorFlow.js format with compatibility settings"""
     print("🔄 Converting model to TensorFlow.js format...")
     
     try:
@@ -321,8 +321,44 @@ def convert_to_tensorflowjs(model, output_dir: Path):
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Convert model
-    tfjs.converters.save_keras_model(model, str(output_dir))
+    # Convert using save_keras_model (direct conversion)
+    # This should work better with newer TensorFlow.js versions
+    # If this fails, we can try SavedModel approach
+    try:
+        print("   Converting model directly to TensorFlow.js format...")
+        tfjs.converters.save_keras_model(model, str(output_dir))
+        print("   ✅ Direct conversion successful")
+    except Exception as e:
+        print(f"   ⚠️  Direct conversion failed: {e}")
+        print("   Trying SavedModel conversion method...")
+        
+        # Fallback: Convert via SavedModel for better compatibility
+        savedmodel_dir = output_dir.parent / "savedmodel_temp"
+        savedmodel_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            print("   Step 1: Saving model as SavedModel...")
+            # Save as SavedModel first (better compatibility with TensorFlow.js)
+            model.save(str(savedmodel_dir), save_format="tf")
+            
+            print("   Step 2: Converting SavedModel to TensorFlow.js...")
+            # Convert SavedModel to TensorFlow.js
+            tfjs.converters.convert_tf_saved_model(
+                str(savedmodel_dir),
+                str(output_dir),
+                quantization_dtype=None,
+            )
+            
+            print("   ✅ SavedModel conversion successful")
+            
+            # Clean up SavedModel directory
+            shutil.rmtree(savedmodel_dir)
+            print("   ✅ Temporary SavedModel files cleaned up")
+        except Exception as e2:
+            # Clean up on error
+            if savedmodel_dir.exists():
+                shutil.rmtree(savedmodel_dir)
+            raise Exception(f"Both conversion methods failed. Direct: {e}, SavedModel: {e2}")
     
     # Save class labels for the React Native app
     class_labels_path = output_dir / "class_labels.json"

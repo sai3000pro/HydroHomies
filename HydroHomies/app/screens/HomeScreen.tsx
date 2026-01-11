@@ -86,12 +86,52 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       where("timestamp", ">=", todayStart),
     )
 
-    return onSnapshot(entriesQuery, (snapshot) => {
-      const entries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
-      setRecentEntries(entries)
-      const total = entries.reduce((sum, entry) => sum + entry.amount, 0)
-      setTodayIntake(total)
-    })
+    return onSnapshot(
+      entriesQuery,
+      (snapshot) => {
+        const entries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
+        setRecentEntries(entries)
+        const total = entries.reduce((sum, entry) => sum + entry.amount, 0)
+        setTodayIntake(total)
+      },
+      (error: any) => {
+        // Handle Firestore index errors gracefully
+        if (error.code === "failed-precondition" && error.message?.includes("index")) {
+          console.warn(
+            "⚠️  Firestore index required for hydration entries query. " +
+              "Create the index in Firebase Console using the URL provided in the error. " +
+              "The app will work, but hydration entries may not load until the index is created."
+          )
+          // Fallback: Query all entries for user and filter in-memory (less efficient but works without index)
+          const fallbackQuery = query(
+            collection(db, "hydrationEntries"),
+            where("userId", "==", userId),
+            // Remove timestamp filter - we'll filter in-memory
+          )
+          
+          onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const allEntries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
+              // Filter for today's entries in-memory
+              const todayEntries = allEntries.filter((entry) => {
+                if (!entry.timestamp) return false
+                const entryDate = entry.timestamp.toDate()
+                return entryDate >= todayStart.toDate()
+              })
+              setRecentEntries(todayEntries)
+              const total = todayEntries.reduce((sum, entry) => sum + entry.amount, 0)
+              setTodayIntake(total)
+            },
+            (fallbackError) => {
+              console.error("Error loading hydration entries (fallback):", fallbackError)
+            }
+          )
+        } else {
+          console.error("Error loading hydration entries:", error)
+        }
+      }
+    )
   }
 
   const subscribeToPet = (userId: string) => {

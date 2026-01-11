@@ -12,7 +12,20 @@ import {
 } from "react-native"
 import { useScrollToTop } from "@react-navigation/native"
 import { SystemBars, SystemBarsProps, SystemBarStyle } from "react-native-edge-to-edge"
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller"
+// Conditionally import KeyboardAwareScrollView - may not work in Expo Go due to worklets version mismatch
+// Use require to catch errors at runtime
+let KeyboardAwareScrollViewComponent: React.ComponentType<any> | null = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const KeyboardController = require("react-native-keyboard-controller")
+  if (KeyboardController && KeyboardController.KeyboardAwareScrollView) {
+    KeyboardAwareScrollViewComponent = KeyboardController.KeyboardAwareScrollView
+  }
+} catch (error) {
+  // KeyboardAwareScrollView not available - use ScrollView as fallback
+  console.warn("KeyboardAwareScrollView not available, using ScrollView fallback for Expo Go compatibility:", error)
+  KeyboardAwareScrollViewComponent = null
+}
 
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
@@ -205,9 +218,12 @@ function ScreenWithScrolling(props: ScreenProps) {
   // More info at: https://reactnavigation.org/docs/use-scroll-to-top/
   useScrollToTop(ref)
 
+  // Use KeyboardAwareScrollView if available, otherwise use regular ScrollView
+  const ScrollComponent = KeyboardAwareScrollViewComponent || ScrollView
+  
   return (
-    <KeyboardAwareScrollView
-      bottomOffset={keyboardBottomOffset}
+    <ScrollComponent
+      {...(KeyboardAwareScrollViewComponent ? { bottomOffset: keyboardBottomOffset } : {})}
       {...{ keyboardShouldPersistTaps, scrollEnabled, ref }}
       {...ScrollViewProps}
       onLayout={(e) => {
@@ -226,7 +242,7 @@ function ScreenWithScrolling(props: ScreenProps) {
       ]}
     >
       {children}
-    </KeyboardAwareScrollView>
+    </ScrollComponent>
   )
 }
 

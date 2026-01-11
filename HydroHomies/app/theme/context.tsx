@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
 } from "react"
 import { StyleProp, useColorScheme } from "react-native"
 import {
@@ -13,9 +14,8 @@ import {
   DefaultTheme as NavDefaultTheme,
   Theme as NavTheme,
 } from "@react-navigation/native"
-import { useMMKVString } from "react-native-mmkv"
 
-import { storage } from "@/utils/storage"
+import { loadString, saveString, remove } from "@/utils/storage"
 
 import { setImperativeTheming } from "./context.utils"
 import { darkTheme, lightTheme } from "./theme"
@@ -57,8 +57,34 @@ export const ThemeProvider: FC<PropsWithChildren<ThemeProviderProps>> = ({
 }) => {
   // The operating system theme:
   const systemColorScheme = useColorScheme()
+  
   // Our saved theme context: can be "light", "dark", or undefined (system theme)
-  const [themeScheme, setThemeScheme] = useMMKVString("ignite.themeScheme", storage)
+  // Use storage utility instead of useMMKVString for Expo Go compatibility
+  const [themeScheme, setThemeSchemeState] = useState<ThemeContextModeT | undefined>(() => {
+    // Load initial value from storage (synchronous for MMKV, async for AsyncStorage fallback)
+    try {
+      const stored = loadString("ignite.themeScheme")
+      return (stored as ThemeContextModeT) || undefined
+    } catch (error) {
+      console.warn("Error loading theme scheme from storage:", error)
+      return undefined
+    }
+  })
+
+  // Update storage when themeScheme changes (mimics useMMKVString behavior)
+  useEffect(() => {
+    if (themeScheme !== undefined && themeScheme !== null) {
+      saveString("ignite.themeScheme", themeScheme)
+    } else {
+      // Remove from storage if undefined
+      remove("ignite.themeScheme")
+    }
+  }, [themeScheme])
+
+  // Wrapper function to set theme scheme (compatible with useMMKVString API)
+  const setThemeScheme = useCallback((value: ThemeContextModeT | undefined) => {
+    setThemeSchemeState(value)
+  }, [])
 
   /**
    * This function is used to set the theme context and is exported from the useAppTheme() hook.

@@ -14,6 +14,7 @@ import {
   increment,
   serverTimestamp,
 } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 import { db } from "./config"
 
 export interface UserStats {
@@ -67,21 +68,79 @@ export const databaseService = {
   // User Profile
   async createUserProfile(uid: string, email: string, displayName?: string): Promise<void> {
     const userRef = doc(db, "users", uid)
-    await setDoc(userRef, {
+    // Remove undefined values - Firestore doesn't allow undefined
+    const profileData: Partial<UserProfile> = {
       uid,
       email,
-      displayName,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    })
+    }
+    // Only include displayName if it's provided (not undefined)
+    if (displayName) {
+      profileData.displayName = displayName
+    }
+    await setDoc(userRef, profileData)
   },
 
   async updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
     const userRef = doc(db, "users", uid)
-    await updateDoc(userRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    })
+    
+    // Check if document exists first
+    const userSnap = await getDoc(userRef)
+    
+    if (!userSnap.exists()) {
+      // Document doesn't exist - create it with setDoc
+      // Get email from auth user if not provided in updates
+      let email = updates.email || ""
+      if (!email) {
+        try {
+          const auth = getAuth()
+          const currentUser = auth.currentUser
+          if (currentUser && currentUser.uid === uid) {
+            email = currentUser.email || ""
+          }
+        } catch (error) {
+          console.warn("Could not get email from auth user:", error)
+        }
+      }
+      
+      // Create the document with all required fields
+      // Remove undefined values - Firestore doesn't allow undefined
+      const profileData: Record<string, any> = {
+        uid,
+        email: email || "", // Email is required for user profile
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }
+      
+      // Only include fields from updates that are not undefined
+      // This ensures we don't set undefined values in Firestore
+      if (updates.stats !== undefined) {
+        profileData.stats = updates.stats
+      }
+      if (updates.displayName !== undefined && updates.displayName !== null) {
+        profileData.displayName = updates.displayName
+      }
+      if (updates.email !== undefined) {
+        profileData.email = updates.email
+      }
+      
+      await setDoc(userRef, profileData, { merge: false }) // Use merge: false to ensure all fields are set when creating
+    } else {
+      // Document exists - update it with updateDoc (more efficient)
+      // Only update fields that are provided (not undefined)
+      const updateData: Partial<UserProfile> = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      }
+      // Remove undefined values to avoid overwriting existing data
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key as keyof UserProfile] === undefined) {
+          delete updateData[key as keyof UserProfile]
+        }
+      })
+      await updateDoc(userRef, updateData)
+    }
   },
 
   async getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -120,18 +179,54 @@ export const databaseService = {
     today.setHours(0, 0, 0, 0)
     const todayStart = Timestamp.fromDate(today)
 
-    // Query today's hydration entries
-    const entriesQuery = query(
-      collection(db, "hydrationEntries"),
-      where("userId", "==", userId),
-      where("timestamp", ">=", todayStart),
-    )
+    try {
+      // Query today's hydration entries
+      // Note: This requires a Firestore composite index (userId + timestamp)
+      // If the index doesn't exist, Firestore will provide a URL to create it
+      const entriesQuery = query(
+        collection(db, "hydrationEntries"),
+        where("userId", "==", userId),
+        where("timestamp", ">=", todayStart),
+      )
 
-    const snapshot = await getDocs(entriesQuery)
-    const entries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
-    const total = entries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
+      const snapshot = await getDocs(entriesQuery)
+      const entries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
+      const total = entries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
 
-    return total
+      return total
+    } catch (error: any) {
+      // Handle Firestore index errors gracefully
+      if (error.code === "failed-precondition" && error.message?.includes("index")) {
+        console.warn(
+          "⚠️  Firestore index required for hydration query. " +
+            "Creating the index will enable efficient queries. " +
+            "Using fallback query (may be slower)."
+        )
+        
+        // Fallback: Query all entries for user and filter in-memory
+        // This works without an index but is less efficient
+        const fallbackQuery = query(
+          collection(db, "hydrationEntries"),
+          where("userId", "==", userId),
+        )
+        
+        const snapshot = await getDocs(fallbackQuery)
+        const allEntries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
+        
+        // Filter for today's entries in-memory
+        const todayEntries = allEntries.filter((entry) => {
+          if (!entry.timestamp) return false
+          const entryDate = entry.timestamp.toDate()
+          return entryDate >= todayStart.toDate()
+        })
+        
+        const total = todayEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
+        return total
+      }
+      
+      // Re-throw other errors
+      throw error
+    }
   },
 
   // Pet State

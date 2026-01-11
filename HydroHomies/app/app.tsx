@@ -21,7 +21,7 @@ import "./utils/gestureHandler"
 import { useEffect, useState } from "react"
 import { useFonts } from "expo-font"
 import * as Linking from "expo-linking"
-import { KeyboardProvider } from "react-native-keyboard-controller"
+import { Platform, View } from "react-native"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
 import { AuthProvider } from "./context/AuthContext"
@@ -32,6 +32,16 @@ import { ThemeProvider } from "./theme/context"
 import { customFontsToLoad } from "./theme/typography"
 import { loadDateFnsLocale } from "./utils/formatDate"
 import * as storage from "./utils/storage"
+
+// KeyboardProvider disabled for Expo Go compatibility
+// react-native-keyboard-controller requires react-native-worklets which has version mismatch in Expo Go
+// (JS version 0.6.1 vs native version 0.5.1 in Expo Go)
+// The app works without KeyboardProvider, just without enhanced keyboard handling
+const SafeKeyboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Skip KeyboardProvider entirely for Expo Go compatibility
+  // In development builds, you can enable KeyboardProvider if worklets version matches
+  return <>{children}</>
+}
 
 export const NAVIGATION_PERSISTENCE_KEY = "NAVIGATION_STATE"
 
@@ -75,6 +85,24 @@ export function App() {
     initI18n()
       .then(() => setIsI18nInitialized(true))
       .then(() => loadDateFnsLocale())
+    
+    // Initialize ML model (will fail gracefully in Expo Go)
+    const initML = async () => {
+      try {
+        const { initializeTensorFlow, loadMLModel } = await import("@/services/ml/waterLevelClassifier")
+        await initializeTensorFlow()
+        await loadMLModel()
+        console.log("✅ ML model loaded successfully")
+      } catch (error: any) {
+        // Expected in Expo Go - model requires native code
+        if (error.message?.includes("Expo Go") || error.message?.includes("native modules")) {
+          console.warn("⚠️  ML model not available in Expo Go. Use a development build to enable ML features.")
+        } else {
+          console.warn("⚠️  ML model not available, using fallback detection:", error.message)
+        }
+      }
+    }
+    initML()
   }, [])
 
   // Before we show the app, we have to wait for our state to be ready.
@@ -93,19 +121,23 @@ export function App() {
   }
 
   // otherwise, we're ready to render the app
+  const AppContent = (
+    <AuthProvider>
+      <ThemeProvider>
+        <AppNavigator
+          linking={linking}
+          initialState={initialNavigationState}
+          onStateChange={onNavigationStateChange}
+        />
+      </ThemeProvider>
+    </AuthProvider>
+  )
+
+  // Skip KeyboardProvider entirely in Expo Go due to react-native-worklets version mismatch
+  // KeyboardProvider requires worklets which has different versions in Expo Go vs dev builds
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <KeyboardProvider>
-        <AuthProvider>
-          <ThemeProvider>
-            <AppNavigator
-              linking={linking}
-              initialState={initialNavigationState}
-              onStateChange={onNavigationStateChange}
-            />
-          </ThemeProvider>
-        </AuthProvider>
-      </KeyboardProvider>
+      <SafeKeyboardProvider>{AppContent}</SafeKeyboardProvider>
     </SafeAreaProvider>
   )
 }

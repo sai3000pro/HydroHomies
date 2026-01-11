@@ -12,6 +12,7 @@ import { databaseService } from "@/services/firebase/database"
 import { useAuth } from "@/context/AuthContext"
 import { authService } from "@/services/firebase/auth"
 import { updatePetAfterHydration } from "@/utils/petEvolution"
+import { detectBottleAndLevel } from "@/services/ml/waterLevelClassifier"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
 
@@ -25,6 +26,8 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
     route.params?.estimatedVolume || null,
   )
   const [bottleType, setBottleType] = useState<string | null>(null)
+  const [waterLevel, setWaterLevel] = useState<string | null>(null)
+  const [detectionConfidence, setDetectionConfidence] = useState<number | null>(null)
   const cameraRef = useRef<CameraView>(null)
 
   const mode = route.params?.mode || "initial"
@@ -77,58 +80,29 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
     setIsProcessing(true)
 
     try {
-      // TODO: Integrate ML model here to:
-      // 1. Detect bottle type (label reading or visual estimation)
-      // 2. Classify water level (Full, Half, Low)
-      // 3. Estimate volume
+      // Use ML model to detect bottle type and water level
+      // This will use the real ML model in development builds, or fallback to simulated detection in Expo Go
+      const detection = await detectBottleAndLevel(uri, isVerification)
 
-      // Simulated detection (replace with actual ML model)
-      const simulatedBottleType = detectBottleTypeSimulated(uri)
-      const simulatedLevel = detectWaterLevelSimulated(uri)
-      const simulatedVolume = estimateVolumeSimulated(simulatedBottleType, simulatedLevel)
+      // Update state with detection results
+      setBottleType(detection.bottleType.name)
+      setWaterLevel(detection.waterLevel)
+      setEstimatedVolume(detection.estimatedVolume)
+      setDetectionConfidence(detection.confidence)
 
-      setBottleType(simulatedBottleType)
-      setEstimatedVolume(simulatedVolume)
+      // Warn user if confidence is low
+      if (detection.confidence < 0.5) {
+        Alert.alert(
+          "Low Confidence",
+          `Detection confidence is low (${Math.round(detection.confidence * 100)}%). The result may not be accurate.`,
+        )
+      }
     } catch (error) {
       console.error("Error processing image:", error)
       Alert.alert("Error", "Failed to process image. Please try again.")
     } finally {
       setIsProcessing(false)
     }
-  }
-
-  // Placeholder functions - to be replaced with actual ML model
-  const detectBottleTypeSimulated = (uri: string): string => {
-    // TODO: Use ML model or label detection API
-    return "SmartWater 1L"
-  }
-
-  const detectWaterLevelSimulated = (uri: string): "full" | "half" | "low" | "empty" => {
-    // TODO: Use ML model to classify water level
-    return isVerification ? "empty" : "full"
-  }
-
-  const estimateVolumeSimulated = (
-    type: string,
-    level: "full" | "half" | "low" | "empty",
-  ): number => {
-    // Parse volume from bottle type (e.g., "SmartWater 1L" -> 1000ml)
-    const volumeMatch = type.match(/(\d+(?:\.\d+)?)\s*(L|l|ml|ML)/i)
-    if (volumeMatch) {
-      let volume = parseFloat(volumeMatch[1])
-      if (volumeMatch[2].toLowerCase() === "l") {
-        volume *= 1000
-      }
-
-      // Adjust based on water level
-      if (level === "full") return Math.round(volume)
-      if (level === "half") return Math.round(volume * 0.5)
-      if (level === "low") return Math.round(volume * 0.25)
-      return 0
-    }
-
-    // Default estimation
-    return isVerification ? 0 : 500
   }
 
   const handleConfirm = async () => {
@@ -262,8 +236,17 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                   preset="subheading"
                   text={isVerification ? "Empty Bottle Detected" : "Bottle Detected"}
                 />
-                {bottleType && <Text text={`Type: ${bottleType}`} />}
+                {bottleType ? <Text text={`Type: ${bottleType}`} /> : null}
+                {waterLevel ? (
+                  <Text text={`Water Level: ${waterLevel.charAt(0).toUpperCase() + waterLevel.slice(1)}`} />
+                ) : null}
                 <Text preset="heading" text={`Volume: ${estimatedVolume}ml`} />
+                {detectionConfidence !== null && (
+                  <Text
+                    text={`Confidence: ${Math.round(detectionConfidence * 100)}%`}
+                    style={detectionConfidence < 0.5 ? { color: theme.colors.palette.angry500 } : undefined}
+                  />
+                )}
               </View>
             )}
           </View>
@@ -301,6 +284,8 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                   setImageUri(null)
                   setEstimatedVolume(null)
                   setBottleType(null)
+                  setWaterLevel(null)
+                  setDetectionConfidence(null)
                 }}
                 style={themed($button)}
                 preset="reversed"
