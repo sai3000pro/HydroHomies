@@ -212,44 +212,19 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         await databaseService.updatePet(user.uid, petUpdates)
       }
 
-      Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`, [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ])
+      // Navigate to Home screen first, then show success message
+      setIsProcessing(false)
+      navigation.navigate("Home")
+      
+      // Show success message after a brief delay to ensure navigation completes
+      setTimeout(() => {
+        Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`)
+      }, 300)
     } catch (error) {
       console.error("Error completing hydration entry:", error)
-      Alert.alert("Error", "Failed to log hydration. Please try again.")
-    } finally {
       setIsProcessing(false)
+      Alert.alert("Error", `Failed to log hydration: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`)
     }
-  }
-
-  const handleSkipVerification = () => {
-    Alert.alert(
-      "Skip Verification?",
-      "Verification helps prevent cheating. Are you sure you want to skip?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Skip",
-          onPress: () => {
-            // Use the estimated volume from route params (from initial scan)
-            // If not available, use current estimatedVolume or default to 0
-            const volumeToUse = route.params?.estimatedVolume || estimatedVolume || 0
-            
-            if (volumeToUse === 0) {
-              Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
-              return
-            }
-            
-            // Pass the volume directly to completeHydrationEntry to avoid state update timing issues
-            completeHydrationEntry(volumeToUse)
-          },
-        },
-      ],
-    )
   }
 
   if (!permission) {
@@ -350,14 +325,6 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                 />
               )}
             </View>
-            {isVerification && (
-              <Button
-                text="Skip Verification"
-                onPress={handleSkipVerification}
-                style={themed($skipButton)}
-                preset="reversed"
-              />
-            )}
           </>
         ) : (
           <>
