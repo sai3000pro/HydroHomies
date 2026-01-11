@@ -217,6 +217,10 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
           </View>
         }
       />
+
+      <Pressable style={themed($close)} onPress={() => navigation.navigate("Home")}>
+        <Text style={themed($X)}>X</Text>
+      </Pressable>
     </Screen>
   )
 }
@@ -312,4 +316,21 @@ const $emptyContainer: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   alignItems: "center",
   backgroundColor: colors.palette.neutral100,
   borderRadius: 12,
+})
+
+const $close: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  width: 64,
+  height: 64,
+  display: "flex",
+  alignSelf: "center",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: spacing.xxl,
+  borderColor: "white",
+  borderWidth: 5,
+  borderRadius: "50%",
+})
+
+const $X: ThemedStyle<TextStyle> = () => ({
+  fontSize: 32,
 })
