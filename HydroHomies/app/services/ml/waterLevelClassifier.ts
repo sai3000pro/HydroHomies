@@ -1,12 +1,12 @@
 /**
  * ML Model for Water Level Classification
- * 
+ *
  * This service loads and uses a TensorFlow.js model trained to classify water bottle levels:
  * - half, full, overflowing
- * 
+ *
  * Model training: See ../../ml_training/train_water_level_model.py
  * Dataset: https://www.kaggle.com/datasets/chethuhn/water-bottle-dataset
- * 
+ *
  * ⚠️ IMPORTANT: This requires a development build or production build.
  * Expo Go does NOT support TensorFlow.js React Native (requires native code).
  * To use the ML model, create a development build:
@@ -21,7 +21,7 @@ import * as ImageManipulator from "expo-image-manipulator"
 
 // Platform-specific TensorFlow.js React Native imports
 // Metro bundler automatically selects the right file based on platform:
-// - tfjsRN.native.ts for iOS/Android (contains actual imports)  
+// - tfjsRN.native.ts for iOS/Android (contains actual imports)
 // - tfjsRN.web.ts for web (returns null)
 // @ts-ignore - Metro resolves platform-specific files automatically
 import { bundleResourceIO, decodeJpeg } from "./tfjsRN"
@@ -109,9 +109,9 @@ export async function loadMLModel(): Promise<void> {
     if (Platform.OS !== "web" && !bundleResourceIO) {
       throw new Error(
         "TensorFlow.js React Native is not available. " +
-        "This requires a development build or production build. " +
-        "Expo Go does not support custom native modules. " +
-        "Run: npx expo prebuild && npm run android"
+          "This requires a development build or production build. " +
+          "Expo Go does not support custom native modules. " +
+          "Run: npx expo prebuild && npm run android",
       )
     }
 
@@ -124,11 +124,11 @@ export async function loadMLModel(): Promise<void> {
         const modelJson = require("../../../assets/models/water-level-classifier/model.json")
         const modelJsonAsset = Asset.fromModule(modelJson)
         await modelJsonAsset.downloadAsync()
-        
+
         if (!modelJsonAsset.localUri) {
           throw new Error("Failed to get local URI for model.json")
         }
-        
+
         model = await tf.loadLayersModel(modelJsonAsset.localUri)
       } else if (bundleResourceIO) {
         // On native with bundleResourceIO (development build)
@@ -140,11 +140,11 @@ export async function loadMLModel(): Promise<void> {
           // According to TensorFlow.js React Native docs, this should work with bundleResourceIO
           const modelJson = require("../../../assets/models/water-level-classifier/model.json")
           const modelWeights = require("../../../assets/models/water-level-classifier/group1-shard1of1.bin")
-          
+
           // Use bundleResourceIO to create an IO handler
           // bundleResourceIO(modelJson, modelWeights) where modelWeights can be a single file or array
           const modelHandler = bundleResourceIO(modelJson, modelWeights)
-          
+
           // Load the model using bundleResourceIO
           model = await tf.loadLayersModel(modelHandler)
         } catch (bundleError: any) {
@@ -167,18 +167,26 @@ export async function loadMLModel(): Promise<void> {
       // Note: bundleResourceIO requires native modules and doesn't work in Expo Go
       // Also, Metro bundler can't resolve .bin files with require() in Expo
       console.warn("⚠️  Could not load model from assets:", assetError.message)
-      
+
       // Check if this is a model architecture error (which happens in dev builds)
       // vs Expo Go error (which happens in Expo Go)
-      if (assetError.message?.includes("InputLayer") || assetError.message?.includes("inputShape") || assetError.message?.includes("batchInputShape")) {
+      if (
+        assetError.message?.includes("InputLayer") ||
+        assetError.message?.includes("inputShape") ||
+        assetError.message?.includes("batchInputShape")
+      ) {
         console.warn("    This is a model architecture compatibility issue.")
-        console.warn("    The model files are loading correctly, but there's a format compatibility issue.")
+        console.warn(
+          "    The model files are loading correctly, but there's a format compatibility issue.",
+        )
         console.warn("    The app will use simulated detection as a fallback.")
         // Don't throw - let it fall through to set model = null and use fallback
         throw new Error(`Model architecture compatibility issue. Using fallback detection.`)
       } else {
         console.warn("    This is expected in Expo Go. The ML model requires native code.")
-        console.warn("    To use the ML model, create a development build: npx expo prebuild && npm run android")
+        console.warn(
+          "    To use the ML model, create a development build: npx expo prebuild && npm run android",
+        )
         console.warn("    The app will use simulated detection as a fallback.")
         // Don't throw - let it fall through to set model = null and use fallback
         throw new Error(`Model loading failed. Using fallback detection.`)
@@ -187,7 +195,7 @@ export async function loadMLModel(): Promise<void> {
   } catch (error: any) {
     modelLoadError = error
     model = null
-    
+
     // Don't throw for expected errors - just log and continue with fallback
     if (
       error.message?.includes("Expo Go") ||
@@ -199,16 +207,21 @@ export async function loadMLModel(): Promise<void> {
       error.message?.includes("batchInputShape")
     ) {
       // Expected errors - model not available, use fallback
-      if (error.message?.includes("architecture compatibility") || error.message?.includes("InputLayer")) {
+      if (
+        error.message?.includes("architecture compatibility") ||
+        error.message?.includes("InputLayer")
+      ) {
         console.warn("⚠️  ML model architecture compatibility issue. Using fallback detection.")
       } else if (error.message?.includes("Expo Go")) {
-        console.warn("⚠️  ML model not available in Expo Go. Use a development build to enable ML features.")
+        console.warn(
+          "⚠️  ML model not available in Expo Go. Use a development build to enable ML features.",
+        )
       } else {
         console.warn("⚠️  ML model not available, using fallback detection.")
       }
       return
     }
-    
+
     // Unexpected error - log as warning but don't throw (use fallback)
     console.warn("⚠️  Unexpected error loading model:", error.message)
     console.warn("    Using fallback detection due to model loading error.")
@@ -231,7 +244,7 @@ export async function unloadMLModel(): Promise<void> {
 
 /**
  * Preprocess image for model input
- * 
+ *
  * Properly decodes JPEG images and converts them to tensors for the ML model.
  * Uses decodeJpeg for native platforms and tf.browser.fromPixels for web.
  */
@@ -241,11 +254,11 @@ async function preprocessImageToTensor(imageUri: string): Promise<tf.Tensor4D> {
     const resized = await ImageManipulator.manipulateAsync(
       imageUri,
       [{ resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } }],
-      { 
+      {
         compress: 0.9, // Good quality for ML inference
         format: ImageManipulator.SaveFormat.JPEG,
         base64: Platform.OS === "web" ? true : false, // Only need base64 for web
-      }
+      },
     )
 
     if (Platform.OS === "web") {
@@ -272,23 +285,22 @@ async function preprocessImageNative(imageUri: string): Promise<tf.Tensor4D> {
   try {
     // Read image as bytes
     let imageBytes: Uint8Array
-    
+
     try {
       const response = await fetch(imageUri)
       const imageData = await response.arrayBuffer()
       imageBytes = new Uint8Array(imageData)
     } catch (fetchError) {
       // If fetch fails, try getting base64 from ImageManipulator
-      const resized = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [],
-        { base64: true, compress: 1 }
-      )
-      
+      const resized = await ImageManipulator.manipulateAsync(imageUri, [], {
+        base64: true,
+        compress: 1,
+      })
+
       if (!resized.base64) {
         throw new Error("Failed to get base64 image data")
       }
-      
+
       // Convert base64 to Uint8Array
       const base64Data = resized.base64.replace(/^data:image\/\w+;base64,/, "")
       const binaryString = atob(base64Data)
@@ -304,7 +316,7 @@ async function preprocessImageNative(imageUri: string): Promise<tf.Tensor4D> {
     // Resize to model input size if needed
     let processedTensor: tf.Tensor3D
     const [height, width] = decodedTensor.shape
-    
+
     if (height !== MODEL_INPUT_SIZE || width !== MODEL_INPUT_SIZE) {
       processedTensor = tf.image.resizeBilinear(decodedTensor, [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE])
       decodedTensor.dispose()
@@ -336,8 +348,8 @@ async function preprocessImageWeb(imageUri: string, base64Data?: string): Promis
   try {
     // Create an HTML Image element and load the image
     const img = new Image()
-    
-    const imageSrc = base64Data 
+
+    const imageSrc = base64Data
       ? `data:image/jpeg;base64,${base64Data.replace(/^data:image\/\w+;base64,/, "")}`
       : imageUri
 
@@ -411,7 +423,9 @@ async function detectWaterLevelWithModel(imageUri: string): Promise<{
 
     const waterLevel = CLASSES[maxIndex] as WaterLevel
 
-    console.log(`Model prediction: index=${maxIndex}, class=${waterLevel}, confidence=${confidence.toFixed(3)}`)
+    console.log(
+      `Model prediction: index=${maxIndex}, class=${waterLevel}, confidence=${confidence.toFixed(3)}`,
+    )
 
     // Clean up tensors
     preprocessedImage.dispose()
@@ -430,7 +444,10 @@ async function detectWaterLevelWithModel(imageUri: string): Promise<{
 /**
  * Simulated water level detection (fallback when model is not available)
  */
-function detectWaterLevelSimulated(imageUri: string, isVerification: boolean = false): {
+function detectWaterLevelSimulated(
+  imageUri: string,
+  isVerification: boolean = false,
+): {
   waterLevel: WaterLevel
   confidence: number
 } {
@@ -446,7 +463,7 @@ function detectWaterLevelSimulated(imageUri: string, isVerification: boolean = f
   // Simulate random detection (for testing)
   const levels: WaterLevel[] = [...CLASSES, "empty", "low"] // Model classes + fallback
   const randomLevel = levels[Math.floor(Math.random() * levels.length)]
-  
+
   return {
     waterLevel: randomLevel,
     confidence: 0.6, // Lower confidence for simulated detection
@@ -462,7 +479,7 @@ async function detectBottleLabel(imageUri: string): Promise<BottleType | null> {
   // - @react-native-ml-kit/text-recognition
   // - expo-document-scanner
   // - Google Cloud Vision API
-  
+
   // For now, return null to fall back to visual estimation
   return null
 }
@@ -486,7 +503,7 @@ async function estimateVolumeFromDimensions(
   // TODO: Implement volume estimation based on pixel dimensions
   // Would need calibration with known reference objects
   // Could use ARKit/ARCore for more accurate measurements
-  
+
   // Placeholder: return average bottle size
   return 500 // ml
 }
@@ -497,7 +514,7 @@ async function estimateVolumeFromDimensions(
  */
 export async function detectBottleAndLevel(
   imageUri: string,
-  isVerification: boolean = false
+  isVerification: boolean = false,
 ): Promise<BottleDetection> {
   try {
     // Try to use ML model if available
@@ -553,7 +570,7 @@ export async function detectBottleAndLevel(
     }
   } catch (error: any) {
     console.error("Error in detectBottleAndLevel:", error)
-    
+
     // Final fallback
     return {
       bottleType: {
@@ -598,7 +615,7 @@ export async function preprocessImageForML(imageUri: string): Promise<string> {
       {
         compress: 0.8,
         format: ImageManipulator.SaveFormat.JPEG,
-      }
+      },
     )
     return result.uri
   } catch (error) {
