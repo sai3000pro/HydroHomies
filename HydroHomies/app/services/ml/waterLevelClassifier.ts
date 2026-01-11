@@ -44,17 +44,11 @@ export interface TribunalEstimate {
   bottleVolume: number // in ml
   waterVolume: number // in ml
   confidence: number // 0-1
-  source: "gemini" | "openrouter"
+  source: "openrouter"
 }
 
 export interface TribunalResult {
-  geminiEstimate?: TribunalEstimate
-  openRouterEstimate?: TribunalEstimate
-  consensus: {
-    bottleVolume: number // in ml - average or consensus
-    waterVolume: number // in ml - average or consensus
-    confidence: number // 0-1 - average confidence
-  }
+  estimate: TribunalEstimate
 }
 
 // Model configuration
@@ -678,99 +672,6 @@ async function imageUriToBase64(imageUri: string): Promise<string> {
 }
 
 /**
- * Call Gemini API to analyze water bottle image
- */
-async function callGeminiAPI(imageBase64: string): Promise<TribunalEstimate> {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
-
-  if (!apiKey) {
-    throw new Error("Gemini API key not configured. Set EXPO_PUBLIC_GEMINI_API_KEY environment variable")
-  }
-
-  try {
-    // Remove data URI prefix for API call
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "")
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Analyze this image of a water bottle. Please provide:
-1. The estimated total capacity/volume of the bottle in milliliters (ml)
-2. The estimated amount of water currently in the bottle in milliliters (ml)
-3. Your confidence level (0.0 to 1.0) in these estimates
-
-Please respond in JSON format only, with this exact structure:
-{
-  "bottleVolume": <number in ml>,
-  "waterVolume": <number in ml>,
-  "confidence": <number between 0.0 and 1.0>
-}`,
-                },
-                {
-                  inlineData: {
-                    mimeType: "image/jpeg",
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      },
-    )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`)
-    }
-
-    const data = await response.json()
-
-    // Extract text from response
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-    if (!textContent) {
-      throw new Error("No text content in Gemini API response")
-    }
-
-    // Parse JSON from response text (Gemini might include markdown code blocks)
-    let jsonText = textContent.trim()
-    // Remove markdown code blocks if present
-    jsonText = jsonText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
-
-    const estimate = JSON.parse(jsonText)
-
-    // Validate response structure
-    if (
-      typeof estimate.bottleVolume !== "number" ||
-      typeof estimate.waterVolume !== "number" ||
-      typeof estimate.confidence !== "number"
-    ) {
-      throw new Error("Invalid response format from Gemini API")
-    }
-
-    return {
-      bottleVolume: Math.round(estimate.bottleVolume),
-      waterVolume: Math.round(estimate.waterVolume),
-      confidence: Math.max(0, Math.min(1, estimate.confidence)),
-      source: "gemini",
-    }
-  } catch (error: any) {
-    console.error("Error calling Gemini API:", error)
-    throw new Error(`Gemini API call failed: ${error.message}`)
-  }
-}
-
-/**
  * Call OpenRouter API to analyze water bottle image
  */
 async function callOpenRouterAPI(imageBase64: string): Promise<TribunalEstimate> {
@@ -871,84 +772,37 @@ Please respond in JSON format only, with this exact structure:
 }
 
 /**
- * Simple test function to verify Gemini and OpenRouter API connections
+ * Simple test function to verify OpenRouter API connection
  * This just tests basic API connectivity without processing images
  */
-export async function testTribunalAPIs(): Promise<{
-  gemini: { success: boolean; message: string; error?: string }
-  openRouter: { success: boolean; message: string; error?: string }
+export async function testTribunalAPI(): Promise<{
+  success: boolean
+  message: string
+  error?: string
 }> {
-  const results: {
-    gemini: { success: boolean; message: string; error?: string }
-    openRouter: { success: boolean; message: string; error?: string }
+  const result: {
+    success: boolean
+    message: string
+    error?: string
   } = {
-    gemini: { success: false, message: "" },
-    openRouter: { success: false, message: "" },
-  }
-
-  // Test Gemini API
-  const geminiApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
-  if (!geminiApiKey) {
-    results.gemini.message = "API key not found (EXPO_PUBLIC_GEMINI_API_KEY)"
-    return results
-  }
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: "Say 'Hello, I am working!' if you can read this.",
-                },
-              ],
-            },
-          ],
-        }),
-      },
-    )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      results.gemini.error = `HTTP ${response.status}: ${errorText}`
-      results.gemini.message = "API call failed"
-      return results
-    }
-
-    const data = await response.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (text) {
-      results.gemini.success = true
-      results.gemini.message = `Success! Response: ${text.substring(0, 100)}`
-    } else {
-      results.gemini.message = "API responded but no text in response"
-    }
-  } catch (error: any) {
-    results.gemini.error = error.message
-    results.gemini.message = `Error: ${error.message}`
+    success: false,
+    message: "",
   }
 
   // Test OpenRouter API
   const openRouterApiKey = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY
   console.log("🔍 OpenRouter API Key check:", openRouterApiKey ? "Found" : "NOT FOUND")
-  
+
   if (!openRouterApiKey) {
-    results.openRouter.message = "API key not found (EXPO_PUBLIC_OPENROUTER_API_KEY). Please set it in your .env file."
+    result.message = "API key not found (EXPO_PUBLIC_OPENROUTER_API_KEY). Please set it in your .env file."
     console.warn("⚠️ OpenRouter API key missing")
-    return results
+    return result
   }
 
   try {
     const model = process.env.EXPO_PUBLIC_OPENROUTER_MODEL || "openai/gpt-4o-mini"
     console.log("🧪 Testing OpenRouter with model:", model)
-    
+
     const requestBody = {
       model: model,
       messages: [
@@ -958,9 +812,9 @@ export async function testTribunalAPIs(): Promise<{
         },
       ],
     }
-    
+
     console.log("📤 OpenRouter request:", JSON.stringify(requestBody, null, 2))
-    
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -977,108 +831,42 @@ export async function testTribunalAPIs(): Promise<{
     if (!response.ok) {
       const errorText = await response.text()
       console.error("❌ OpenRouter error response:", errorText)
-      results.openRouter.error = `HTTP ${response.status}: ${errorText}`
-      results.openRouter.message = `API call failed: ${response.status} ${response.statusText}`
-      return results
+      result.error = `HTTP ${response.status}: ${errorText}`
+      result.message = `API call failed: ${response.status} ${response.statusText}`
+      return result
     }
 
     const data = await response.json()
     console.log("✅ OpenRouter response data:", JSON.stringify(data, null, 2))
-    
+
     const text = data.choices?.[0]?.message?.content
     if (text) {
-      results.openRouter.success = true
-      results.openRouter.message = `Success! Response: ${text.substring(0, 100)}`
-      console.log("✅ OpenRouter success:", results.openRouter.message)
+      result.success = true
+      result.message = `Success! Response: ${text.substring(0, 100)}`
+      console.log("✅ OpenRouter success:", result.message)
     } else {
-      results.openRouter.message = "API responded but no content in response"
+      result.message = "API responded but no content in response"
       console.warn("⚠️ OpenRouter: No content in response")
     }
   } catch (error: any) {
     console.error("❌ OpenRouter exception:", error)
-    results.openRouter.error = error.message || String(error)
-    results.openRouter.message = `Error: ${error.message || String(error)}`
+    result.error = error.message || String(error)
+    result.message = `Error: ${error.message || String(error)}`
   }
 
-  return results
+  return result
 }
 
 /**
- * Tribunal: Get estimates from both Gemini and OpenRouter APIs
- * and combine them into a consensus estimate
+ * Tribunal: Get estimate from OpenRouter API (using Gemini model)
  */
 export async function getTribunalEstimate(imageUri: string): Promise<TribunalResult> {
   try {
-    console.log("🏛️  Tribunal: Analyzing image with Gemini and OpenRouter APIs...")
-
-    // Convert image to base64
+    console.log("🏛️  Tribunal: Analyzing image with OpenRouter API (Gemini model)...")
     const imageBase64 = await imageUriToBase64(imageUri)
-
-    // Call both APIs in parallel
-    const [geminiResult, openRouterResult] = await Promise.allSettled([
-      callGeminiAPI(imageBase64),
-      callOpenRouterAPI(imageBase64),
-    ])
-
-    let geminiEstimate: TribunalEstimate | undefined
-    let openRouterEstimate: TribunalEstimate | undefined
-
-    // Process Gemini result
-    if (geminiResult.status === "fulfilled") {
-      geminiEstimate = geminiResult.value
-      console.log("✅ Gemini API estimate:", geminiEstimate)
-    } else {
-      console.warn("⚠️  Gemini API failed:", geminiResult.reason)
-    }
-
-    // Process OpenRouter result
-    if (openRouterResult.status === "fulfilled") {
-      openRouterEstimate = openRouterResult.value
-      console.log("✅ OpenRouter API estimate:", openRouterEstimate)
-    } else {
-      console.warn("⚠️  OpenRouter API failed:", openRouterResult.reason)
-    }
-
-    // If both failed, throw error
-    if (!geminiEstimate && !openRouterEstimate) {
-      throw new Error("Both Gemini and OpenRouter APIs failed")
-    }
-
-    // Calculate consensus (average of both estimates, or use single estimate if one failed)
-    let consensusBottleVolume = 0
-    let consensusWaterVolume = 0
-    let totalConfidence = 0
-    let count = 0
-
-    if (geminiEstimate) {
-      consensusBottleVolume += geminiEstimate.bottleVolume * geminiEstimate.confidence
-      consensusWaterVolume += geminiEstimate.waterVolume * geminiEstimate.confidence
-      totalConfidence += geminiEstimate.confidence
-      count++
-    }
-
-    if (openRouterEstimate) {
-      consensusBottleVolume += openRouterEstimate.bottleVolume * openRouterEstimate.confidence
-      consensusWaterVolume += openRouterEstimate.waterVolume * openRouterEstimate.confidence
-      totalConfidence += openRouterEstimate.confidence
-      count++
-    }
-
-    // Weighted average based on confidence
-    const avgConfidence = count > 0 ? totalConfidence / count : 0
-    const consensus = {
-      bottleVolume: Math.round(count > 0 ? consensusBottleVolume / totalConfidence : 0),
-      waterVolume: Math.round(count > 0 ? consensusWaterVolume / totalConfidence : 0),
-      confidence: Math.min(1, avgConfidence), // Cap at 1.0
-    }
-
-    console.log("🏛️  Tribunal consensus:", consensus)
-
-    return {
-      geminiEstimate,
-      openRouterEstimate,
-      consensus,
-    }
+    const estimate = await callOpenRouterAPI(imageBase64)
+    console.log("✅ OpenRouter API estimate:", estimate)
+    return { estimate }
   } catch (error: any) {
     console.error("Error in tribunal estimate:", error)
     throw new Error(`Tribunal estimate failed: ${error.message}`)

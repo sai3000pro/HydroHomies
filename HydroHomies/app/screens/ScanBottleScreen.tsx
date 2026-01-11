@@ -1,5 +1,5 @@
 import { FC, useState, useRef, useEffect } from "react"
-import { View, ViewStyle, TextStyle, Image, Alert, ActivityIndicator } from "react-native"
+import { View, ViewStyle, TextStyle, ImageStyle, Image, Alert, ActivityIndicator } from "react-native"
 import { Text } from "@/components/Text"
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -84,20 +84,20 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // This will use the real ML model in development builds, or fallback to simulated detection in Expo Go
       const detection = await detectBottleAndLevel(uri, isVerification)
 
-      // Also get tribunal estimate from Gemini and OpenRouter APIs
+      // Also get tribunal estimate from OpenRouter API (using Gemini model)
       let tribunalEstimate = null
       try {
         tribunalEstimate = await getTribunalEstimate(uri)
         console.log("🏛️ Tribunal estimate received:", tribunalEstimate)
         
-        // Use tribunal consensus if available and confidence is good
-        if (tribunalEstimate && tribunalEstimate.consensus.confidence > 0.5) {
+        // Use tribunal estimate if available and confidence is good
+        if (tribunalEstimate && tribunalEstimate.estimate.confidence > 0.5) {
           // Override with tribunal estimates
-          setEstimatedVolume(tribunalEstimate.consensus.waterVolume)
-          setDetectionConfidence(tribunalEstimate.consensus.confidence)
+          setEstimatedVolume(tribunalEstimate.estimate.waterVolume)
+          setDetectionConfidence(tribunalEstimate.estimate.confidence)
           // Update bottle type if we have volume info
-          if (tribunalEstimate.consensus.bottleVolume > 0) {
-            setBottleType(`Bottle (${tribunalEstimate.consensus.bottleVolume}ml)`)
+          if (tribunalEstimate.estimate.bottleVolume > 0) {
+            setBottleType(`Bottle (${tribunalEstimate.estimate.bottleVolume}ml)`)
           }
         } else {
           // Fall back to ML model detection
@@ -117,7 +117,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       setWaterLevel(detection.waterLevel)
 
       // Warn user if confidence is low
-      const finalConfidence = tribunalEstimate?.consensus.confidence || detection.confidence
+      const finalConfidence = tribunalEstimate?.estimate.confidence || detection.confidence
       if (finalConfidence < 0.5) {
         Alert.alert(
           "Low Confidence",
@@ -133,13 +133,15 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
   }
 
   const handleConfirm = async () => {
-    if (!estimatedVolume || estimatedVolume === 0) {
-      Alert.alert("Error", "Could not detect water volume. Please try again.")
+    // For initial scan, we need an estimated volume to proceed
+    if (!isVerification && (estimatedVolume === null || estimatedVolume === 0)) {
+      Alert.alert("Error", "Could not detect water volume. Please try again or take another photo.")
       return
     }
 
     if (isVerification) {
       // Verify empty bottle - complete the hydration entry
+      // Use the estimated volume from the initial scan (passed via route params)
       await completeHydrationEntry()
     } else {
       // Navigate to verification screen
@@ -151,7 +153,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
     }
   }
 
-  const completeHydrationEntry = async () => {
+  const completeHydrationEntry = async (overrideVolume?: number) => {
     setIsProcessing(true)
 
     try {
@@ -168,9 +170,17 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         return
       }
 
+      // Use override volume if provided, otherwise use estimated volume from state, or fall back to route params
+      const volumeToLog = overrideVolume ?? estimatedVolume ?? route.params?.estimatedVolume ?? 0
+
+      if (volumeToLog === 0) {
+        Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
+        return
+      }
+
       // Check for overdrinking
       const todayIntake = await databaseService.getUserHydrationToday(user.uid)
-      const totalAfter = todayIntake + (estimatedVolume || 0)
+      const totalAfter = todayIntake + volumeToLog
       const shouldFlag = totalAfter > profile.stats.dailyWaterGoal * 1.5
 
       if (shouldFlag) {
@@ -188,7 +198,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // Add hydration entry
       await databaseService.addHydrationEntry({
         userId: user.uid,
-        amount: estimatedVolume || 0,
+        amount: volumeToLog,
         bottleType: bottleType || undefined,
         beforeImageUri,
         afterImageUri,
@@ -198,11 +208,11 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // Update pet
       const pet = await databaseService.getPet(user.uid)
       if (pet) {
-        const petUpdates = updatePetAfterHydration(pet, estimatedVolume || 0)
+        const petUpdates = updatePetAfterHydration(pet, volumeToLog)
         await databaseService.updatePet(user.uid, petUpdates)
       }
 
-      Alert.alert("Success! 💧", `Logged ${estimatedVolume}ml of water!`, [
+      Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`, [
         {
           text: "OK",
           onPress: () => navigation.goBack(),
@@ -225,9 +235,17 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         {
           text: "Skip",
           onPress: () => {
-            if (estimatedVolume) {
-              completeHydrationEntry()
+            // Use the estimated volume from route params (from initial scan)
+            // If not available, use current estimatedVolume or default to 0
+            const volumeToUse = route.params?.estimatedVolume || estimatedVolume || 0
+            
+            if (volumeToUse === 0) {
+              Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
+              return
             }
+            
+            // Pass the volume directly to completeHydrationEntry to avoid state update timing issues
+            completeHydrationEntry(volumeToUse)
           },
         },
       ],
@@ -272,9 +290,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                   text={isVerification ? "Empty Bottle Detected" : "Bottle Detected"}
                 />
                 {bottleType ? <Text text={`Type: ${bottleType}`} /> : null}
-                {waterLevel ? (
-                  <Text text={`Water Level: ${waterLevel.charAt(0).toUpperCase() + waterLevel.slice(1)}`} />
-                ) : null}
+
                 <Text preset="heading" text={`Volume: ${estimatedVolume}ml`} />
                 {detectionConfidence !== null && (
                   <Text
@@ -397,7 +413,7 @@ const $imageContainer: ThemedStyle<ViewStyle> = () => ({
   position: "relative",
 })
 
-const $previewImage: ThemedStyle<ViewStyle> = () => ({
+const $previewImage: ThemedStyle<ImageStyle> = () => ({
   width: "100%",
   height: "100%",
   resizeMode: "contain",
