@@ -9,8 +9,10 @@ import {
   useState,
 } from "react"
 import { User, onAuthStateChanged } from "firebase/auth"
-import { auth } from "@/services/firebase/config"
+import { doc, getDoc } from "firebase/firestore"
+
 import { authService } from "@/services/firebase/auth"
+import { auth, db } from "@/services/firebase/config"
 import { databaseService } from "@/services/firebase/database"
 
 export type AuthContextType = {
@@ -20,6 +22,9 @@ export type AuthContextType = {
   setAuthEmail: (email: string) => void
   logout: () => Promise<void>
   validationError: string
+  pet: object
+  setPet: (any) => void
+  userProfile: object
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
@@ -28,6 +33,8 @@ export interface AuthProviderProps {}
 
 export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
+  const [userProfile, setUserProfile] = useState(null)
+  const [pet, setPet] = useState(null)
   const [authEmail, setAuthEmail] = useState("")
   const [isLoading, setIsLoading] = useState(true)
 
@@ -76,6 +83,46 @@ export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ childre
     }
   }, [])
 
+  const loadUserData = async () => {
+    if (!user) {
+      setUserProfile(null)
+      setPet(null)
+      return
+    }
+
+    try {
+      // 1. Create a reference to the specific user's document
+      const userDocRef = doc(db, "users", user.uid)
+
+      // 2. Fetch the document
+      const userDocSnap = await getDoc(userDocRef)
+
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data()
+
+        // 3. Update Profile State
+        // (You might need to cast 'data' to your UserProfile type if using TypeScript)
+        setUserProfile(data as any)
+
+        // 4. Update Pet State
+        // Since we saved 'pet' as a field inside this same document, we just grab it here.
+        if (data.pet) {
+          setPet(data.pet)
+        } else {
+          setPet(null)
+        }
+      } else {
+        console.log("No user document found!")
+      }
+    } catch (error) {
+      console.error("Error getting user profile", error)
+    }
+  }
+
+  useEffect(() => {
+    loadUserData()
+  }, [user])
+
   const validationError = useMemo(() => {
     if (!authEmail || authEmail.length === 0) return "can't be blank"
     if (authEmail.length < 6) return "must be at least 6 characters"
@@ -86,6 +133,9 @@ export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ childre
   const value = {
     isAuthenticated: !!user,
     user,
+    userProfile,
+    pet,
+    setPet,
     authEmail,
     setAuthEmail,
     logout,

@@ -15,6 +15,7 @@ import { HomeScreen } from "@/screens/HomeScreen"
 import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
 import { LoginScreen } from "@/screens/LoginScreen"
 import { OnboardingScreen } from "@/screens/OnboardingScreen"
+import { PetSelectScreen } from "@/screens/PetSelectScreen"
 import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
 import { SignUpScreen } from "@/screens/SignUpScreen"
 import { useAppTheme } from "@/theme/context"
@@ -32,7 +33,9 @@ const exitRoutes = Config.exitRoutes
 const Stack = createNativeStackNavigator<AppStackParamList>()
 
 const AppStack = () => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, pet } = useAuth()
+
+  console.log("MARI", pet)
 
   const {
     theme: { colors },
@@ -47,16 +50,20 @@ const AppStack = () => {
           backgroundColor: colors.background,
         },
       }}
-      initialRouteName={isAuthenticated ? "Home" : "Login"}
+      initialRouteName={isAuthenticated ? (pet ? "Home" : "PetSelect") : "Login"}
     >
       {isAuthenticated ? (
-        <>
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="ScanBottle" component={ScanBottleScreen} />
-          <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-          <Stack.Screen name="FriendPet" component={FriendPetScreen} />
-        </>
+        pet ? (
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="ScanBottle" component={ScanBottleScreen} />
+            <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+            <Stack.Screen name="FriendPet" component={FriendPetScreen} />
+          </>
+        ) : (
+          <Stack.Screen name="PetSelect" component={PetSelectScreen} />
+        )
       ) : (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
