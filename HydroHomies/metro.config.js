@@ -28,4 +28,21 @@ config.resolver.unstable_conditionNames = ["require", "default", "browser"]
 // such as Firebase that use the extension cjs.
 config.resolver.sourceExts.push("cjs")
 
+// Configure path aliases for TypeScript paths
+// This enables @assets/* and @/* aliases to work with require()
+config.resolver.alias = {
+  "@": require("path").resolve(__dirname, "app"),
+  "@assets": require("path").resolve(__dirname, "assets"),
+}
+
+// JSON files should be in sourceExts to allow require() statements
+// But we also want them available as assets for expo-asset
+// Note: JSON files are already in sourceExts by default in Expo Metro config
+// We don't need to add them to assetExts - expo-asset will handle them via require()
+
+// Add .bin files to assetExts so Metro can handle them as assets
+// Note: Metro can't require() .bin files directly, but they can be loaded via Asset.fromModule()
+// after being referenced in the assetBundlePatterns in app.json
+config.resolver.assetExts.push("bin")
+
 module.exports = config

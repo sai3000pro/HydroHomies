@@ -1,6 +1,8 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getAuth, Auth } from "firebase/auth"
+import { getAuth, initializeAuth, getReactNativePersistence, Auth } from "firebase/auth"
 import { getFirestore, Firestore } from "firebase/firestore"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import { Platform } from "react-native"
 
 // Firebase configuration
 // Values from Firebase Console -> Project Settings -> General -> Your apps
@@ -52,13 +54,42 @@ if (getApps().length === 0) {
   console.log("Using existing Firebase app")
 }
 
-try {
+// Initialize Firebase Auth with AsyncStorage persistence for React Native
+// IMPORTANT: initializeAuth must be called BEFORE getAuth to configure persistence
+// getAuth() will auto-initialize auth if it doesn't exist, preventing us from configuring persistence
+// So we MUST try initializeAuth first, then fall back to getAuth if it's already initialized
+
+if (Platform.OS !== "web") {
+  // For React Native (iOS/Android), try initializeAuth with AsyncStorage persistence first
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    })
+    console.log("✅ Firebase auth initialized with AsyncStorage persistence")
+  } catch (initError: any) {
+    // If initializeAuth fails, auth is likely already initialized
+    // Check error code to see if it's "already-initialized"
+    if (initError.code === "auth/already-initialized" || initError.message?.includes("already initialized")) {
+      console.warn("⚠️  Firebase auth already initialized - using existing instance")
+      console.warn("    (Persistence may not be configured. Clear app data to re-initialize with persistence)")
+      auth = getAuth(app)
+    } else {
+      // Other error - try getAuth as fallback
+      console.warn("⚠️  Error initializing auth with persistence, falling back to getAuth:", initError.message)
+      auth = getAuth(app)
+    }
+  }
+} else {
+  // For web, use default getAuth (handles persistence automatically via localStorage)
   auth = getAuth(app)
+  console.log("✅ Firebase auth initialized for web (uses localStorage)")
+}
+
+try {
   db = getFirestore(app)
-  console.log("Firebase auth and firestore initialized")
+  console.log("✅ Firebase auth and firestore initialized successfully")
 } catch (error: any) {
-  console.error("Error getting auth/firestore:", error)
-  // This shouldn't happen, but if it does, throw it
+  console.error("❌ Error initializing firestore:", error)
   throw error
 }
 
