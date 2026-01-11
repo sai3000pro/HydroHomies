@@ -1,150 +1,77 @@
-# HydroHype (AquaGotchi) 💧🌱
+# Welcome to your new ignited app!
 
-**Gamifying Hydration with Computer Vision & Social Pressure**
+> The latest and greatest boilerplate for Infinite Red opinions
 
-HydroHype is a mobile application that turns drinking water into a competitive game. Instead of manually typing "500ml", users use Computer Vision to verify their intake.
+This is the boilerplate that [Infinite Red](https://infinite.red) uses as a way to test bleeding-edge changes to our React Native stack.
 
-## 🎯 Core Concept
+- [Quick start documentation](https://github.com/infinitered/ignite/blob/master/docs/boilerplate/Boilerplate.md)
+- [Full documentation](https://github.com/infinitered/ignite/blob/master/docs/README.md)
 
-HydroHype attacks the problem of dehydration from three angles:
-- **Biological**: Calculates personalized needs based on user stats (Height, Weight, Age, Activity Level)
-- **Social**: A leaderboard to compete with friends
-- **Nurturing**: A "Tamagotchi-style" virtual pet that grows (or withers) based on your hydration
-
-## ✨ Features
-
-### Phase 1: Onboarding
-- User inputs: Height, Weight, Age, Activity Level
-- Automatic calculation of Daily Water Goal
-- Receive and name your hydration avatar (pet)
-
-### Phase 2: The "Drink" Loop
-- **Scan**: Point camera at water bottle
-  - Label/Bottle Detection via Computer Vision
-  - Water level classification (Full, Half, Low, Empty)
-  - Volume estimation
-- **Verify**: Take second photo of empty bottle (prevents cheating)
-  - Can be disabled if no time
-  - Overdrinking warnings with 😏 emoji on leaderboard
-
-### Phase 3: Gamification
-- **Leaderboard**: Live-updating ranking showing most hydrated users
-- **Virtual Pet**: Grows and evolves as you log water
-  - Starts as a seed, evolves to plant, flower, droplet, or fish
-  - Withers if you miss your goal
-  - Visit friends' pets to see their status
-
-## 🛠️ Technology Stack
-
-- **Frontend**: React Native (Expo) - Cross-platform (iOS & Android)
-- **Backend**: Firebase
-  - Authentication: Email/Password
-  - Firestore: Real-time database for leaderboard and pet state
-- **Camera**: expo-camera for bottle scanning
-- **ML Model**: Placeholder structure for water level classification
-  - Dataset: [Water Bottle Dataset](https://www.kaggle.com/datasets/chethuhn/water-bottle-dataset)
-  - Framework: TensorFlow Lite / ONNX (to be integrated)
-
-## 📱 Getting Started
-
-See [SETUP.md](./HydroHomies/SETUP.md) for detailed installation and setup instructions.
-
-### Quick Start
+## Getting Started
 
 ```bash
-# Install dependencies
-cd HydroHomies/HydroHomies
-npm install
-npm install firebase expo-camera expo-image-picker expo-image-manipulator expo-media-library
-
-# Configure Firebase (see SETUP.md)
-# Update app/services/firebase/config.ts with your Firebase credentials
-
-# Run the app
-npm start
+npm install --legacy-peer-deps
+npm run start
 ```
 
-## 📂 Project Structure
+To make things work on your local simulator, or on your phone, you need first to [run `eas build`](https://github.com/infinitered/ignite/blob/master/docs/expo/EAS.md). We have many shortcuts on `package.json` to make it easier:
 
-```
-HydroHomies/
-├── HydroHomies/
-│   ├── app/
-│   │   ├── components/      # Reusable components
-│   │   │   └── Pet.tsx      # Virtual pet component
-│   │   ├── context/         # React Context providers
-│   │   │   └── AuthContext.tsx
-│   │   ├── screens/         # Screen components
-│   │   │   ├── OnboardingScreen.tsx
-│   │   │   ├── HomeScreen.tsx
-│   │   │   ├── ScanBottleScreen.tsx
-│   │   │   ├── LeaderboardScreen.tsx
-│   │   │   └── FriendPetScreen.tsx
-│   │   ├── services/
-│   │   │   ├── firebase/    # Firebase config & services
-│   │   │   └── ml/         # ML model integration (placeholder)
-│   │   └── utils/          # Utility functions
-│   │       ├── waterGoalCalculator.ts
-│   │       └── petEvolution.ts
-│   └── SETUP.md            # Detailed setup instructions
-└── README.md               # This file
+```bash
+npm run build:ios:sim # build for ios simulator
+npm run build:ios:device # build for ios device
+npm run build:ios:prod # build for ios device
 ```
 
-## 🎮 User Flow
+### `./assets`
 
-1. **Sign Up/Login**: Firebase authentication
-2. **Onboarding**: Enter stats → Calculate goal → Name pet
-3. **Home Screen**: View pet, hydration progress, quick actions
-4. **Scan Bottle**: Camera → Detect bottle → Estimate volume
-5. **Verify**: Photo of empty bottle (optional but recommended)
-6. **Reward**: Pet gains XP, evolves; Leaderboard updates
-7. **Social**: View leaderboard, visit friends' pets
+This directory is designed to organize and store various assets, making it easy for you to manage and use them in your application. The assets are further categorized into subdirectories, including `icons` and `images`:
 
-## 🤖 ML Model Integration (Future Work)
+```tree
+assets
+├── icons
+└── images
+```
 
-The app currently uses placeholder functions for bottle detection. To integrate the actual ML model:
+**icons**
+This is where your icon assets will live. These icons can be used for buttons, navigation elements, or any other UI components. The recommended format for icons is PNG, but other formats can be used as well.
 
-1. Download the dataset: `kagglehub.dataset_download("chethuhn/water-bottle-dataset")`
-2. Train model (TensorFlow, PyTorch, or ML Kit)
-3. Convert to mobile format (.tflite or ONNX)
-4. Update `/app/services/ml/waterLevelClassifier.ts`
-5. Integrate with camera screen
+Ignite comes with a built-in `Icon` component. You can find detailed usage instructions in the [docs](https://github.com/infinitered/ignite/blob/master/docs/boilerplate/app/components/Icon.md).
 
-See [SETUP.md](./HydroHomies/SETUP.md) for detailed ML integration steps.
+**images**
+This is where your images will live, such as background images, logos, or any other graphics. You can use various formats such as PNG, JPEG, or GIF for your images.
 
-## 🔒 Security & Privacy
+Another valuable built-in component within Ignite is the `AutoImage` component. You can find detailed usage instructions in the [docs](https://github.com/infinitered/ignite/blob/master/docs/Components-AutoImage.md).
 
-- Firebase Authentication for secure user login
-- Firestore security rules to protect user data
-- Camera permissions handled via Expo permissions API
-- No personal data stored outside Firebase
+How to use your `icon` or `image` assets:
 
-## 🚧 Roadmap
+```typescript
+import { Image } from 'react-native';
 
-- [x] Basic app structure and navigation
-- [x] Firebase authentication and database setup
-- [x] Onboarding flow with water goal calculation
-- [x] Camera integration for bottle scanning
-- [x] Two-step verification (full → empty bottle)
-- [x] Virtual pet system with evolution
-- [x] Leaderboard with real-time updates
-- [x] Friend pet viewing
-- [ ] Actual ML model integration
-- [ ] OCR for label reading
-- [ ] Web search for bottle database
-- [ ] Push notifications
-- [ ] Weekly/monthly statistics
-- [ ] Achievements system
-- [ ] Social sharing
+const MyComponent = () => {
+  return (
+    <Image source={require('assets/images/my_image.png')} />
+  );
+};
+```
 
-## 📝 License
+## Running Maestro end-to-end tests
 
-[Your License Here]
+Follow our [Maestro Setup](https://ignitecookbook.com/docs/recipes/MaestroSetup) recipe.
 
-## 👥 Contributors
+## Next Steps
 
-[Your Name/Team]
+### Ignite Cookbook
 
----
+[Ignite Cookbook](https://ignitecookbook.com/) is an easy way for developers to browse and share code snippets (or “recipes”) that actually work.
 
-**Made with 💧 and ❤️ for better hydration habits**
+### Upgrade Ignite boilerplate
+
+Read our [Upgrade Guide](https://ignitecookbook.com/docs/recipes/UpdatingIgnite) to learn how to upgrade your Ignite project.
+
+## Community
+
+⭐️ Help us out by [starring on GitHub](https://github.com/infinitered/ignite), filing bug reports in [issues](https://github.com/infinitered/ignite/issues) or [ask questions](https://github.com/infinitered/ignite/discussions).
+
+💬 Join us on [Slack](https://join.slack.com/t/infiniteredcommunity/shared_invite/zt-1f137np4h-zPTq_CbaRFUOR_glUFs2UA) to discuss.
+
+📰 Make our Editor-in-chief happy by [reading the React Native Newsletter](https://reactnativenewsletter.com/).
