@@ -170,8 +170,10 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         return
       }
 
-      // Use override volume if provided, otherwise use estimated volume from state, or fall back to route params
-      const volumeToLog = overrideVolume ?? estimatedVolume ?? route.params?.estimatedVolume ?? 0
+      // Use override volume if provided
+      // In verification mode, use the volume from the initial scan (route params)
+      // Otherwise, use current estimated volume or fall back to route params
+      const volumeToLog = overrideVolume ?? (isVerification ? route.params?.estimatedVolume : estimatedVolume) ?? route.params?.estimatedVolume ?? 0
 
       if (volumeToLog === 0) {
         Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
@@ -212,18 +214,25 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         await databaseService.updatePet(user.uid, petUpdates)
       }
 
-      // Navigate to Home screen first, then show success message
+      // Navigate to Home screen first
       setIsProcessing(false)
       navigation.navigate("Home")
       
-      // Show success message after a brief delay to ensure navigation completes
+      // Show success alert after a short delay to ensure navigation completes
       setTimeout(() => {
         Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`)
       }, 300)
     } catch (error) {
       console.error("Error completing hydration entry:", error)
       setIsProcessing(false)
-      Alert.alert("Error", `Failed to log hydration: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`)
+      
+      // Navigate to Home screen even on error
+      navigation.navigate("Home")
+      
+      // Show error alert after navigation
+      setTimeout(() => {
+        Alert.alert("Error", "Failed to log hydration. Please try again.")
+      }, 300)
     }
   }
 
@@ -426,6 +435,3 @@ const $button: ThemedStyle<ViewStyle> = () => ({
   flex: 1,
 })
 
-const $skipButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginTop: spacing.xs,
-})
