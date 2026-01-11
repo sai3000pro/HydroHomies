@@ -17,6 +17,7 @@ import {
 import { authService } from "@/services/firebase/auth"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore"
+import { testTribunalAPIs } from "@/services/ml/waterLevelClassifier"
 import { db } from "@/services/firebase/config"
 
 interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
@@ -152,6 +153,30 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
     setIsRefreshing(false)
   }
 
+  const handleTestAPIs = async () => {
+    try {
+      Alert.alert("Testing APIs...", "Please wait while we test Gemini and OpenRouter APIs")
+      const results = await testTribunalAPIs()
+      
+      let message = "API Test Results:\n\n"
+      message += `Gemini: ${results.gemini.success ? "✅ " : "❌ "}${results.gemini.message}\n\n`
+      message += `OpenRouter: ${results.openRouter.success ? "✅ " : "❌ "}${results.openRouter.message}`
+      
+      if (results.gemini.error) {
+        message += `\n\nGemini Error: ${results.gemini.error}`
+      }
+      if (results.openRouter.error) {
+        message += `\n\nOpenRouter Error: ${results.openRouter.error}`
+      }
+      
+      Alert.alert("API Test Results", message)
+      console.log("API Test Results:", results)
+    } catch (error: any) {
+      Alert.alert("Error", `Failed to test APIs: ${error.message}`)
+      console.error("Error testing APIs:", error)
+    }
+  }
+
   const dailyGoal = userProfile?.stats?.dailyWaterGoal || 2500
   const progress = calculateProgress(todayIntake, dailyGoal)
   const shouldFlag = shouldFlagOverdrinking(todayIntake, dailyGoal)
@@ -241,6 +266,12 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           <Button
             text="🏆 Leaderboard"
             onPress={() => navigation.navigate("Leaderboard")}
+            style={themed($actionButton)}
+            preset="reversed"
+          />
+          <Button
+            text="🧪 Test APIs"
+            onPress={handleTestAPIs}
             style={themed($actionButton)}
             preset="reversed"
           />

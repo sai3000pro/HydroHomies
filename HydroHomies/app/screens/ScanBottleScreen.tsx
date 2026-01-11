@@ -12,7 +12,7 @@ import { databaseService } from "@/services/firebase/database"
 import { useAuth } from "@/context/AuthContext"
 import { authService } from "@/services/firebase/auth"
 import { updatePetAfterHydration } from "@/utils/petEvolution"
-import { detectBottleAndLevel } from "@/services/ml/waterLevelClassifier"
+import { detectBottleAndLevel, getTribunalEstimate } from "@/services/ml/waterLevelClassifier"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
 
@@ -84,17 +84,44 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // This will use the real ML model in development builds, or fallback to simulated detection in Expo Go
       const detection = await detectBottleAndLevel(uri, isVerification)
 
-      // Update state with detection results
-      setBottleType(detection.bottleType.name)
+      // Also get tribunal estimate from Gemini and OpenRouter APIs
+      let tribunalEstimate = null
+      try {
+        tribunalEstimate = await getTribunalEstimate(uri)
+        console.log("🏛️ Tribunal estimate received:", tribunalEstimate)
+        
+        // Use tribunal consensus if available and confidence is good
+        if (tribunalEstimate && tribunalEstimate.consensus.confidence > 0.5) {
+          // Override with tribunal estimates
+          setEstimatedVolume(tribunalEstimate.consensus.waterVolume)
+          setDetectionConfidence(tribunalEstimate.consensus.confidence)
+          // Update bottle type if we have volume info
+          if (tribunalEstimate.consensus.bottleVolume > 0) {
+            setBottleType(`Bottle (${tribunalEstimate.consensus.bottleVolume}ml)`)
+          }
+        } else {
+          // Fall back to ML model detection
+          setEstimatedVolume(detection.estimatedVolume)
+          setDetectionConfidence(detection.confidence)
+          setBottleType(detection.bottleType.name)
+        }
+      } catch (tribunalError) {
+        console.warn("⚠️ Tribunal estimate failed, using ML model:", tribunalError)
+        // Fall back to ML model detection if tribunal fails
+        setEstimatedVolume(detection.estimatedVolume)
+        setDetectionConfidence(detection.confidence)
+        setBottleType(detection.bottleType.name)
+      }
+
+      // Update water level from detection (not from tribunal)
       setWaterLevel(detection.waterLevel)
-      setEstimatedVolume(detection.estimatedVolume)
-      setDetectionConfidence(detection.confidence)
 
       // Warn user if confidence is low
-      if (detection.confidence < 0.5) {
+      const finalConfidence = tribunalEstimate?.consensus.confidence || detection.confidence
+      if (finalConfidence < 0.5) {
         Alert.alert(
           "Low Confidence",
-          `Detection confidence is low (${Math.round(detection.confidence * 100)}%). The result may not be accurate.`,
+          `Detection confidence is low (${Math.round(finalConfidence * 100)}%). The result may not be accurate.`,
         )
       }
     } catch (error) {
@@ -150,13 +177,21 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         Alert.alert("⚠️ Slow Down!", "You're drinking a lot today! Stay safe and hydrated.")
       }
 
+      // Filter out data URIs (base64 images) - they're too large for Firestore
+      // Only store file:// URIs or Firebase Storage URLs
+      const isDataUri = (uri: string | null | undefined) => uri?.startsWith("data:") ?? false
+      const beforeImageUri = route.params?.initialImageUri && !isDataUri(route.params.initialImageUri)
+        ? route.params.initialImageUri
+        : undefined
+      const afterImageUri = imageUri && !isDataUri(imageUri) ? imageUri : undefined
+
       // Add hydration entry
       await databaseService.addHydrationEntry({
         userId: user.uid,
         amount: estimatedVolume || 0,
         bottleType: bottleType || undefined,
-        beforeImageUri: route.params?.initialImageUri,
-        afterImageUri: imageUri || undefined,
+        beforeImageUri,
+        afterImageUri,
         verified: true,
       })
 
