@@ -247,6 +247,7 @@ export const TextField = forwardRef(function TextField(props: TextFieldProps, re
 })
 
 const $labelStyle: ThemedStyle<TextStyle> = ({ spacing }) => ({
+  color: "#000000",
   marginBottom: spacing.xs,
 })
 
@@ -254,16 +255,16 @@ const $inputWrapperStyle: ThemedStyle<ViewStyle> = ({ colors }) => ({
   alignItems: "flex-start",
   borderWidth: 1,
   borderRadius: 4,
-  backgroundColor: colors.palette.neutral200,
+  backgroundColor: "#D9D9D9",
   borderColor: colors.palette.neutral400,
   overflow: "hidden",
 })
 
-const $inputStyle: ThemedStyle<TextStyle> = ({ colors, typography, spacing }) => ({
+const $inputStyle: ThemedStyle<TextStyle> = ({ typography, spacing }) => ({
   flex: 1,
   alignSelf: "stretch",
   fontFamily: typography.primary.normal,
-  color: colors.text,
+  color: "#000000",
   fontSize: 16,
   height: 24,
   // https://github.com/facebook/react-native/issues/21720#issuecomment-532642093

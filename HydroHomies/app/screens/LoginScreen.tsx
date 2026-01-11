@@ -1,8 +1,10 @@
-import { ComponentType, FC, useEffect, useMemo, useRef, useState } from "react"
+import { ComponentType, FC, useMemo, useRef, useState } from "react"
 // eslint-disable-next-line no-restricted-imports
 import { TextInput, TextStyle, ViewStyle, Alert, View } from "react-native"
+import { useNavigation } from "@react-navigation/native"
 
 import { Button } from "@/components/Button"
+import { Container } from "@/components/Container"
 import { PressableIcon } from "@/components/Icon"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
@@ -17,12 +19,14 @@ import type { ThemedStyle } from "@/theme/types"
 interface LoginScreenProps extends AppStackScreenProps<"Login"> {}
 
 export const LoginScreen: FC<LoginScreenProps> = () => {
+  const navigation = useNavigation()
+
   const authPasswordInput = useRef<TextInput>(null)
 
   const [authPassword, setAuthPassword] = useState("")
   const [isAuthPasswordHidden, setIsAuthPasswordHidden] = useState(true)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const [attemptsCount, setAttemptsCount] = useState(0)
+  const [errorText, setErrorText] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { authEmail, setAuthEmail, validationError } = useAuth()
 
@@ -31,22 +35,11 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
     theme: { colors },
   } = useAppTheme()
 
-  useEffect(() => {
-    // Pre-fill form for development (remove in production)
-    // setAuthEmail("test@example.com")
-    // setAuthPassword("password123")
-  }, [setAuthEmail])
-
   const error = isSubmitted ? validationError : ""
 
   async function login() {
-    console.log("Login button clicked!")
-    console.log("Email:", authEmail)
-    console.log("Password length:", authPassword.length)
-    console.log("Validation error:", validationError)
-
     setIsSubmitted(true)
-    setAttemptsCount(attemptsCount + 1)
+    setErrorText("")
 
     if (validationError) {
       console.log("Validation error - blocking login:", validationError)
@@ -92,8 +85,6 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
     try {
       // Try to sign in with Firebase
       await authService.signIn(authEmail, authPassword)
-      // Auth state change will be handled by AuthContext
-      // Navigation will happen automatically via isAuthenticated check
       console.log("Login successful!")
     } catch (error: any) {
       console.error("Login error:", error)
@@ -118,41 +109,7 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
 
       // Handle different Firebase auth error codes
       if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") {
-        // User doesn't exist or invalid credentials - try to create account
-        // Firebase returns auth/invalid-credential for both wrong password and non-existent user for security
-        try {
-          console.log("User not found or invalid credential, attempting to create account...")
-          await authService.signUp(authEmail, authPassword)
-          errorMessage = ""
-          console.log("✅ Account created successfully! You are now logged in.")
-          // Account created successfully - auth state will update automatically via AuthContext
-          // Don't show error message, just return - user will be redirected to Home/Onboarding
-          setIsLoading(false)
-          setIsSubmitted(false)
-          return
-        } catch (signUpError: any) {
-          console.error("Sign up error:", signUpError)
-          if (signUpError.code === "auth/email-already-in-use") {
-            // User exists but password was wrong
-            errorMessage =
-              "This email is already registered. The password you entered is incorrect. Please check your password or use 'Forgot Password' if needed."
-          } else if (signUpError.code === "auth/operation-not-allowed") {
-            errorMessage =
-              "Email/Password authentication is not enabled in Firebase. Please enable it in Firebase Console > Authentication > Sign-in method > Email/Password."
-          } else if (
-            signUpError.code === "auth/invalid-api-key" ||
-            signUpError.message?.includes("API key")
-          ) {
-            errorMessage = "Firebase is not configured. Please check your Firebase config."
-          } else if (signUpError.code === "auth/weak-password") {
-            errorMessage =
-              "Password is too weak. Please use a stronger password (at least 6 characters)."
-          } else if (signUpError.code === "auth/invalid-email") {
-            errorMessage = "Invalid email address format. Please enter a valid email."
-          } else {
-            errorMessage = `Failed to create account: ${signUpError.message || signUpError.code || "Unknown error"}`
-          }
-        }
+        errorMessage = "User not found or invalid credentials."
       } else if (error.code === "auth/wrong-password") {
         errorMessage = "Incorrect password. Please try again or reset your password."
       } else if (error.code === "auth/invalid-email") {
@@ -167,9 +124,9 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
       }
 
       if (errorMessage) {
-        // Alert.alert works on web via react-native-web
         Alert.alert("Error", errorMessage)
       }
+      setErrorText(errorMessage)
     } finally {
       setIsLoading(false)
       setIsSubmitted(false)
@@ -182,7 +139,7 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
         return (
           <PressableIcon
             icon={isAuthPasswordHidden ? "view" : "hidden"}
-            color={colors.palette.neutral800}
+            color="#000000"
             containerStyle={props.style}
             size={20}
             onPress={() => setIsAuthPasswordHidden(!isAuthPasswordHidden)}
@@ -198,131 +155,119 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
       contentContainerStyle={themed($screenContentContainer)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <Text testID="login-heading" tx="loginScreen:logIn" preset="heading" style={themed($logIn)} />
-      <Text tx="loginScreen:enterDetails" preset="subheading" style={themed($enterDetails)} />
+      <Container headingImage={require("../../assets/images/login-header.png")}>
+        <View style={themed($mainContainer)}>
+          <View style={themed($formContainer)}>
+            <TextField
+              value={authEmail}
+              onChangeText={setAuthEmail}
+              containerStyle={themed($textField)}
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              keyboardType="email-address"
+              labelTx="loginScreen:emailFieldLabel"
+              placeholderTx="loginScreen:emailFieldPlaceholder"
+              placeholderTextColor="#000000"
+              helper={error}
+              status={error ? "error" : undefined}
+              onSubmitEditing={() => authPasswordInput.current?.focus()}
+            />
 
-      {!isFirebaseConfigured && (
-        <View style={themed($configWarning)}>
-          <Text preset="bold" text="⚠️ Firebase Not Configured" style={themed($warningTitle)} />
-          <Text
-            size="sm"
-            text="Please configure Firebase before using the app. See SETUP.md for instructions."
-            style={themed($warningText)}
-          />
+            <TextField
+              ref={authPasswordInput}
+              value={authPassword}
+              onChangeText={setAuthPassword}
+              containerStyle={themed($textField)}
+              autoCapitalize="none"
+              autoComplete="password"
+              autoCorrect={false}
+              secureTextEntry={isAuthPasswordHidden}
+              labelTx="loginScreen:passwordFieldLabel"
+              placeholderTx="loginScreen:passwordFieldPlaceholder"
+              placeholderTextColor="#000000"
+              onSubmitEditing={login}
+              RightAccessory={PasswordRightAccessory}
+            />
+
+            <Button
+              testID="login-button"
+              tx="loginScreen:tapToLogIn"
+              style={themed($tapButton)}
+              preset="reversed"
+              onPress={() => {
+                console.log("Button onPress handler called!")
+                login().catch((error) => {
+                  console.error("Login function error:", error)
+                  Alert.alert("Unexpected Error", `Login failed: ${error.message || error}`)
+                })
+              }}
+              disabled={isLoading}
+            />
+
+            {errorText && <Text style={themed($error)}>{errorText}</Text>}
+          </View>
+
+          <Text style={themed($text)}>
+            No account?{" "}
+            <Text style={themed($signup)} onPress={() => navigation.navigate("SignUp")}>
+              Sign-up
+            </Text>
+          </Text>
         </View>
-      )}
-
-      {attemptsCount > 2 && (
-        <Text tx="loginScreen:hint" size="sm" weight="light" style={themed($hint)} />
-      )}
-
-      <TextField
-        value={authEmail}
-        onChangeText={setAuthEmail}
-        containerStyle={themed($textField)}
-        autoCapitalize="none"
-        autoComplete="email"
-        autoCorrect={false}
-        keyboardType="email-address"
-        labelTx="loginScreen:emailFieldLabel"
-        placeholderTx="loginScreen:emailFieldPlaceholder"
-        helper={error}
-        status={error ? "error" : undefined}
-        onSubmitEditing={() => authPasswordInput.current?.focus()}
-      />
-
-      <TextField
-        ref={authPasswordInput}
-        value={authPassword}
-        onChangeText={setAuthPassword}
-        containerStyle={themed($textField)}
-        autoCapitalize="none"
-        autoComplete="password"
-        autoCorrect={false}
-        secureTextEntry={isAuthPasswordHidden}
-        labelTx="loginScreen:passwordFieldLabel"
-        placeholderTx="loginScreen:passwordFieldPlaceholder"
-        onSubmitEditing={login}
-        RightAccessory={PasswordRightAccessory}
-      />
-
-      <Button
-        testID="login-button"
-        tx="loginScreen:tapToLogIn"
-        style={themed($tapButton)}
-        preset="reversed"
-        onPress={() => {
-          console.log("Button onPress handler called!")
-          login().catch((error) => {
-            console.error("Login function error:", error)
-            Alert.alert("Unexpected Error", `Login failed: ${error.message || error}`)
-          })
-        }}
-        disabled={isLoading}
-      />
-
-      {/* Debug info - remove in production */}
-      {__DEV__ && (
-        <View style={themed($debugInfo)}>
-          <Text size="xs" text={`Email: ${authEmail || "(empty)"}`} />
-          <Text size="xs" text={`Password length: ${authPassword.length}`} />
-          <Text size="xs" text={`Validation error: ${validationError || "none"}`} />
-          <Text size="xs" text={`Firebase configured: ${isFirebaseConfigured ? "yes" : "no"}`} />
-          <Text size="xs" text={`Is loading: ${isLoading}`} />
-        </View>
-      )}
+      </Container>
     </Screen>
   )
 }
 
-const $screenContentContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  paddingVertical: spacing.xxl,
-  paddingHorizontal: spacing.lg,
+const $screenContentContainer: ThemedStyle<ViewStyle> = () => ({
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#89DDF9",
 })
 
-const $logIn: ThemedStyle<TextStyle> = ({ spacing }) => ({
-  marginBottom: spacing.sm,
+const $mainContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  width: "100%",
+  height: 400,
+  padding: spacing.lg,
+  borderRadius: 33,
+  backgroundColor: "#C2F5FF",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "space-between",
 })
 
-const $enterDetails: ThemedStyle<TextStyle> = ({ spacing }) => ({
-  marginBottom: spacing.lg,
-})
-
-const $hint: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
-  color: colors.tint,
-  marginBottom: spacing.md,
+const $formContainer: ThemedStyle<ViewStyle> = () => ({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
 })
 
 const $textField: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  width: "100%",
   marginBottom: spacing.lg,
 })
 
-const $tapButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginTop: spacing.xs,
+const $tapButton: ThemedStyle<ViewStyle> = () => ({
+  width: 100,
+  borderRadius: 33,
+  backgroundColor: "#D9D9D9",
 })
 
-const $configWarning: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  backgroundColor: colors.palette.warning100,
-  borderLeftWidth: 4,
-  borderLeftColor: colors.palette.warning500,
-  padding: spacing.md,
-  borderRadius: 8,
-  marginBottom: spacing.md,
+const $error: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
+  marginTop: spacing.md,
+  color: colors.error,
 })
 
-const $warningTitle: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
-  color: colors.palette.warning900,
-  marginBottom: spacing.xs,
+const $text: ThemedStyle<TextStyle> = () => ({
+  color: "#000000",
 })
 
-const $warningText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.warning800,
-})
-
-const $debugInfo: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  marginTop: spacing.lg,
-  padding: spacing.md,
-  backgroundColor: colors.palette.neutral100,
-  borderRadius: 8,
-  gap: spacing.xs,
+const $signup: ThemedStyle<TextStyle> = () => ({
+  color: "blue",
+  fontWeight: "bold",
 })

@@ -37,8 +37,8 @@ const en = {
     emailFieldLabel: "Email",
     passwordFieldLabel: "Password",
     emailFieldPlaceholder: "Enter your email address",
-    passwordFieldPlaceholder: "Super secret password here",
-    tapToLogIn: "Tap to log in!",
+    passwordFieldPlaceholder: "Enter your password",
+    tapToLogIn: "Login",
     hint: "Hint: you can use any email address and your favorite password :)",
   },
   demoNavigator: {
