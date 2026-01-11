@@ -19,6 +19,7 @@ export type DemoTabParamList = {
 export type AppStackParamList = {
   Welcome: undefined
   Login: undefined
+  SignUp: undefined
   Onboarding: undefined
   Home: undefined
   ScanBottle: {

@@ -16,6 +16,7 @@ import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
 import { LoginScreen } from "@/screens/LoginScreen"
 import { OnboardingScreen } from "@/screens/OnboardingScreen"
 import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
+import { SignUpScreen } from "@/screens/SignUpScreen"
 import { useAppTheme } from "@/theme/context"
 
 import type { AppStackParamList, NavigationProps } from "./navigationTypes"
@@ -59,6 +60,7 @@ const AppStack = () => {
       ) : (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
         </>
       )}
 
