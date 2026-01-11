@@ -349,7 +349,7 @@ const $mainContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $formContainer: ThemedStyle<ViewStyle> = () => ({
-  width: "100%",
+  width: "105%",
   display: "flex",
   alignItems: "center",
   flexDirection: "column",
