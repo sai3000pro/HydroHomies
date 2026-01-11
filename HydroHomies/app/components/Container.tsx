@@ -27,10 +27,11 @@ export function Container({ headingImage, children }: ContainerProps): JSX.Eleme
   )
 }
 
-const $outerBox: ThemedStyle<ViewStyle> = () => ({
+const $outerBox: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   width: "90%",
   padding: 6,
   borderColor: "#00439C",
+  marginTop: spacing.lg,
   borderWidth: 3,
   borderRadius: 33,
   backgroundColor: "transparent",
@@ -45,7 +46,8 @@ const $innerBox: ThemedStyle<ViewStyle> = () => ({
 })
 
 const $heading: ThemedStyle<ImageStyle> = () => ({
-  top: -40,
+  top: -20,
+  height: 41,
   zIndex: 99,
   width: "90%",
   position: "absolute",
