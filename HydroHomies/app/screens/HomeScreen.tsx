@@ -55,26 +55,26 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const loadData = async () => {
     if (!user) return
 
-    try {
-      const profile = await databaseService.getUserProfile(user.uid)
-      setUserProfile(profile)
-
-      if (!profile?.stats) {
-        // User hasn't completed onboarding
-        navigation.replace("Onboarding")
-        return
-      }
-
-      // Load initial pet state (real-time updates are handled by subscribeToPet)
-      const petData = await databaseService.getPet(user.uid)
-      setPet(petData)
-
-      // Note: Hydration entries are handled by subscribeToHydrationEntries
-      // No need to create a duplicate listener here
-    } catch (error) {
-      console.error("Error loading data:", error)
-      Alert.alert("Error", "Failed to load data. Please try again.")
-    }
+    // try {
+    //   const profile = await databaseService.getUserProfile(user.uid)
+    //   setUserProfile(profile)
+    //
+    //   if (!profile?.stats) {
+    //     // User hasn't completed onboarding
+    //     navigation.replace("Onboarding")
+    //     return
+    //   }
+    //
+    //   // Load initial pet state (real-time updates are handled by subscribeToPet)
+    //   const petData = await databaseService.getPet(user.uid)
+    //   setPet(petData)
+    //
+    //   // Note: Hydration entries are handled by subscribeToHydrationEntries
+    //   // No need to create a duplicate listener here
+    // } catch (error) {
+    //   console.error("Error loading data:", error)
+    //   Alert.alert("Error", "Failed to load data. Please try again.")
+    // }
   }
 
   const subscribeToHydrationEntries = (userId: string) => {

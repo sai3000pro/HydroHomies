@@ -36,7 +36,7 @@ const defaultPets = [
 
 export const PetSelectScreen: FC<PetSelectScreenProps> = ({ navigation }) => {
   const { themed } = useAppTheme()
-  const { setPet } = useAuth()
+  const { setPet, setUserProfile, userProfile } = useAuth()
 
   const [isLoading, setIsLoading] = useState(false)
   const [name, setName] = useState("")
@@ -84,6 +84,10 @@ export const PetSelectScreen: FC<PetSelectScreenProps> = ({ navigation }) => {
       console.log("Pet adopted successfully!")
 
       setPet(pet)
+      setUserProfile({
+        ...userProfile,
+        pet: pet,
+      })
       navigation.reset({
         index: 0,
         routes: [{ name: "Home" }],

@@ -25,6 +25,7 @@ export type AuthContextType = {
   pet: object
   setPet: (any) => void
   userProfile: object
+  setUserProfile: (any) => void
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
@@ -134,6 +135,7 @@ export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ childre
     isAuthenticated: !!user,
     user,
     userProfile,
+    setUserProfile,
     pet,
     setPet,
     authEmail,
