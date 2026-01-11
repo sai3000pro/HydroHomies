@@ -1,9 +1,10 @@
-import { FC, useEffect, useState } from "react"
+import { FC, useEffect, useMemo, useState } from "react"
 import { View, ViewStyle, Image, ImageStyle, TextStyle } from "react-native"
+
 import { Text } from "@/components/Text"
+import { PetState } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { PetState } from "@/services/firebase/database"
 
 interface PetProps {
   pet: PetState
@@ -12,57 +13,35 @@ interface PetProps {
 
 export const Pet: FC<PetProps> = ({ pet, size = "medium" }) => {
   const { themed, theme } = useAppTheme()
-  const [petEmoji, setPetEmoji] = useState("🌱")
+  const elephantPic = require("../../assets/images/basic-pet-1.png")
+  const alienPic = require("../../assets/images/basic-pet-2.png")
+  const sphelePic = require("../../assets/images/basic-pet-3.png")
 
-  useEffect(() => {
-    // Map pet type and health to emoji representation
-    const healthEmoji = pet.health > 70 ? "😊" : pet.health > 40 ? "😐" : "😢"
-
+  const image = useMemo(() => {
     switch (pet.type) {
-      case "seed":
-        setPetEmoji(pet.health > 70 ? "🌱" : "🥀")
-        break
-      case "sprout":
-        setPetEmoji(pet.health > 70 ? "🌿" : "🥀")
-        break
-      case "plant":
-        setPetEmoji(pet.health > 70 ? "🌳" : "🍂")
-        break
-      case "flower":
-        setPetEmoji(pet.health > 70 ? "🌸" : "🥀")
-        break
-      case "droplet":
-        setPetEmoji(pet.health > 70 ? "💧" : "💦")
-        break
-      case "fish":
-        setPetEmoji(pet.health > 70 ? "🐠" : "🐟")
-        break
+      case "elephant":
+        return elephantPic
+      case "alien":
+        return alienPic
+      case "sphele":
+        return sphelePic
       default:
-        setPetEmoji("🌱")
+        return elephantPic
     }
-  }, [pet.type, pet.health])
-
-  const sizeStyles = {
-    small: { fontSize: 48, containerSize: 80 },
-    medium: { fontSize: 96, containerSize: 150 },
-    large: { fontSize: 144, containerSize: 200 },
-  }
-
-  const currentSize = sizeStyles[size]
+  }, [pet])
 
   return (
     <View style={themed($container)}>
-      <View
+      <Image
+        source={image}
         style={themed([
           $petContainer,
           {
-            width: currentSize.containerSize,
-            height: currentSize.containerSize,
+            width: 250,
+            height: 250,
           },
         ])}
-      >
-        <Text style={[{ fontSize: currentSize.fontSize }, themed($petEmoji)]}>{petEmoji}</Text>
-      </View>
+      />
       <Text preset="subheading" text={pet.name} style={themed($petName)} />
       <Text size="sm" text={`Level ${pet.level} • ${pet.type}`} style={themed($petInfo)} />
       <View style={themed($healthBarContainer)}>

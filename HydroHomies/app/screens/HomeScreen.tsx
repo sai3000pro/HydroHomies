@@ -1,34 +1,35 @@
 import { FC, useEffect, useState } from "react"
 import { View, ViewStyle, TextStyle, ScrollView, RefreshControl, Alert } from "react-native"
-import { Text } from "@/components/Text"
+import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore"
+
 import { Button } from "@/components/Button"
-import { Screen } from "@/components/Screen"
-import { useAppTheme } from "@/theme/context"
-import type { ThemedStyle } from "@/theme/types"
-import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { Pet } from "@/components/Pet"
+import { Screen } from "@/components/Screen"
+import { Text } from "@/components/Text"
 import { useAuth } from "@/context/AuthContext"
+import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import { authService } from "@/services/firebase/auth"
+import { db } from "@/services/firebase/config"
 import {
   databaseService,
   type UserProfile,
   type PetState,
   type HydrationEntry,
 } from "@/services/firebase/database"
-import { authService } from "@/services/firebase/auth"
-import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
-import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore"
 import { testTribunalAPIs } from "@/services/ml/waterLevelClassifier"
-import { db } from "@/services/firebase/config"
+import { useAppTheme } from "@/theme/context"
+import type { ThemedStyle } from "@/theme/types"
+import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
 
 export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
-  const { logout } = useAuth()
+  const { userProfile: blehhh } = useAuth()
   const user = authService.getCurrentUser()
 
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [pet, setPet] = useState<PetState | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(blehhh)
+  const [pet, setPet] = useState<PetState | null>(blehhh.pet)
   const [todayIntake, setTodayIntake] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [recentEntries, setRecentEntries] = useState<HydrationEntry[]>([])
@@ -101,7 +102,7 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           console.warn(
             "⚠️  Firestore index required for hydration entries query. " +
               "Create the index in Firebase Console using the URL provided in the error. " +
-              "The app will work, but hydration entries may not load until the index is created."
+              "The app will work, but hydration entries may not load until the index is created.",
           )
           // Fallback: Query all entries for user and filter in-memory (less efficient but works without index)
           const fallbackQuery = query(
@@ -109,7 +110,7 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
             where("userId", "==", userId),
             // Remove timestamp filter - we'll filter in-memory
           )
-          
+
           onSnapshot(
             fallbackQuery,
             (snapshot) => {
@@ -126,12 +127,12 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
             },
             (fallbackError) => {
               console.error("Error loading hydration entries (fallback):", fallbackError)
-            }
+            },
           )
         } else {
           console.error("Error loading hydration entries:", error)
         }
-      }
+      },
     )
   }
 
@@ -157,18 +158,18 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
     try {
       Alert.alert("Testing APIs...", "Please wait while we test Gemini and OpenRouter APIs")
       const results = await testTribunalAPIs()
-      
+
       let message = "API Test Results:\n\n"
       message += `Gemini: ${results.gemini.success ? "✅ " : "❌ "}${results.gemini.message}\n\n`
       message += `OpenRouter: ${results.openRouter.success ? "✅ " : "❌ "}${results.openRouter.message}`
-      
+
       if (results.gemini.error) {
         message += `\n\nGemini Error: ${results.gemini.error}`
       }
       if (results.openRouter.error) {
         message += `\n\nOpenRouter Error: ${results.openRouter.error}`
       }
-      
+
       Alert.alert("API Test Results", message)
       console.log("API Test Results:", results)
     } catch (error: any) {
@@ -199,7 +200,7 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           <Text preset="heading" text="HydroHype 💧" />
           <Text
             size="md"
-            text={`Welcome back, ${userProfile?.displayName || user?.email || "User"}!`}
+            text={`Welcome back, ${userProfile?.username || user?.email || "User"}!`}
           />
         </View>
 

@@ -1,3 +1,4 @@
+import { getAuth } from "firebase/auth"
 import {
   collection,
   doc,
@@ -14,7 +15,7 @@ import {
   increment,
   serverTimestamp,
 } from "firebase/firestore"
-import { getAuth } from "firebase/auth"
+
 import { db } from "./config"
 
 export interface UserStats {
@@ -52,7 +53,7 @@ export interface PetState {
   experience: number
   lastFed: Timestamp
   name: string
-  type: "seed" | "sprout" | "plant" | "flower" | "droplet" | "fish"
+  type: "sphele" | "elephant" | "alien"
   updatedAt: Timestamp
 }
 
@@ -84,10 +85,10 @@ export const databaseService = {
 
   async updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
     const userRef = doc(db, "users", uid)
-    
+
     // Check if document exists first
     const userSnap = await getDoc(userRef)
-    
+
     if (!userSnap.exists()) {
       // Document doesn't exist - create it with setDoc
       // Get email from auth user if not provided in updates
@@ -103,7 +104,7 @@ export const databaseService = {
           console.warn("Could not get email from auth user:", error)
         }
       }
-      
+
       // Create the document with all required fields
       // Remove undefined values - Firestore doesn't allow undefined
       const profileData: Record<string, any> = {
@@ -112,7 +113,7 @@ export const databaseService = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }
-      
+
       // Only include fields from updates that are not undefined
       // This ensures we don't set undefined values in Firestore
       if (updates.stats !== undefined) {
@@ -124,7 +125,7 @@ export const databaseService = {
       if (updates.email !== undefined) {
         profileData.email = updates.email
       }
-      
+
       await setDoc(userRef, profileData, { merge: false }) // Use merge: false to ensure all fields are set when creating
     } else {
       // Document exists - update it with updateDoc (more efficient)
@@ -200,30 +201,30 @@ export const databaseService = {
         console.warn(
           "⚠️  Firestore index required for hydration query. " +
             "Creating the index will enable efficient queries. " +
-            "Using fallback query (may be slower)."
+            "Using fallback query (may be slower).",
         )
-        
+
         // Fallback: Query all entries for user and filter in-memory
         // This works without an index but is less efficient
         const fallbackQuery = query(
           collection(db, "hydrationEntries"),
           where("userId", "==", userId),
         )
-        
+
         const snapshot = await getDocs(fallbackQuery)
         const allEntries = snapshot.docs.map((doc) => doc.data() as HydrationEntry)
-        
+
         // Filter for today's entries in-memory
         const todayEntries = allEntries.filter((entry) => {
           if (!entry.timestamp) return false
           const entryDate = entry.timestamp.toDate()
           return entryDate >= todayStart.toDate()
         })
-        
+
         const total = todayEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
         return total
       }
-      
+
       // Re-throw other errors
       throw error
     }
