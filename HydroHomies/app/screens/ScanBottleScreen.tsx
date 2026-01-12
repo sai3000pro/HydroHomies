@@ -1,18 +1,27 @@
 import { FC, useState, useRef, useEffect } from "react"
-import { View, ViewStyle, TextStyle, ImageStyle, Image, Alert, ActivityIndicator } from "react-native"
-import { Text } from "@/components/Text"
-import { Button } from "@/components/Button"
-import { Screen } from "@/components/Screen"
-import { useAppTheme } from "@/theme/context"
-import type { ThemedStyle } from "@/theme/types"
-import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import {
+  View,
+  ViewStyle,
+  TextStyle,
+  ImageStyle,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from "react-native"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import * as ImagePicker from "expo-image-picker"
-import { databaseService } from "@/services/firebase/database"
+
+import { Button } from "@/components/Button"
+import { Screen } from "@/components/Screen"
+import { Text } from "@/components/Text"
 import { useAuth } from "@/context/AuthContext"
+import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { authService } from "@/services/firebase/auth"
-import { updatePetAfterHydration } from "@/utils/petEvolution"
+import { databaseService } from "@/services/firebase/database"
 import { detectBottleAndLevel, getTribunalEstimate } from "@/services/ml/waterLevelClassifier"
+import { useAppTheme } from "@/theme/context"
+import type { ThemedStyle } from "@/theme/types"
+import { updatePetAfterHydration } from "@/utils/petEvolution"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
 
@@ -89,7 +98,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       try {
         tribunalEstimate = await getTribunalEstimate(uri)
         console.log("🏛️ Tribunal estimate received:", tribunalEstimate)
-        
+
         // Use tribunal estimate if available and confidence is good
         if (tribunalEstimate && tribunalEstimate.estimate.confidence > 0.5) {
           // Override with tribunal estimates
@@ -173,7 +182,11 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // Use override volume if provided
       // In verification mode, use the volume from the initial scan (route params)
       // Otherwise, use current estimated volume or fall back to route params
-      const volumeToLog = overrideVolume ?? (isVerification ? route.params?.estimatedVolume : estimatedVolume) ?? route.params?.estimatedVolume ?? 0
+      const volumeToLog =
+        overrideVolume ??
+        (isVerification ? route.params?.estimatedVolume : estimatedVolume) ??
+        route.params?.estimatedVolume ??
+        0
 
       if (volumeToLog === 0) {
         Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
@@ -192,9 +205,10 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // Filter out data URIs (base64 images) - they're too large for Firestore
       // Only store file:// URIs or Firebase Storage URLs
       const isDataUri = (uri: string | null | undefined) => uri?.startsWith("data:") ?? false
-      const beforeImageUri = route.params?.initialImageUri && !isDataUri(route.params.initialImageUri)
-        ? route.params.initialImageUri
-        : undefined
+      const beforeImageUri =
+        route.params?.initialImageUri && !isDataUri(route.params.initialImageUri)
+          ? route.params.initialImageUri
+          : undefined
       const afterImageUri = imageUri && !isDataUri(imageUri) ? imageUri : undefined
 
       // Add hydration entry
@@ -202,8 +216,6 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
         userId: user.uid,
         amount: volumeToLog,
         bottleType: bottleType || undefined,
-        beforeImageUri,
-        afterImageUri,
         verified: true,
       })
 
@@ -217,7 +229,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
       // Navigate to Home screen first
       setIsProcessing(false)
       navigation.navigate("Home")
-      
+
       // Show success alert after a short delay to ensure navigation completes
       setTimeout(() => {
         Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`)
@@ -225,10 +237,10 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
     } catch (error) {
       console.error("Error completing hydration entry:", error)
       setIsProcessing(false)
-      
+
       // Navigate to Home screen even on error
       navigation.navigate("Home")
-      
+
       // Show error alert after navigation
       setTimeout(() => {
         Alert.alert("Error", "Failed to log hydration. Please try again.")
@@ -279,7 +291,11 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route 
                 {detectionConfidence !== null && (
                   <Text
                     text={`Confidence: ${Math.round(detectionConfidence * 100)}%`}
-                    style={detectionConfidence < 0.5 ? { color: theme.colors.palette.angry500 } : undefined}
+                    style={
+                      detectionConfidence < 0.5
+                        ? { color: theme.colors.palette.angry500 }
+                        : undefined
+                    }
                   />
                 )}
               </View>
@@ -434,4 +450,3 @@ const $buttonRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $button: ThemedStyle<ViewStyle> = () => ({
   flex: 1,
 })
-

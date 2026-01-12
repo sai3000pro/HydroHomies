@@ -197,7 +197,7 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={themed($header)}>
-          <Text preset="heading" text="HydroHype 💧" />
+          <Text preset="heading" text="HydroHomies 💧" />
           <Text
             size="md"
             text={`Welcome back, ${userProfile?.username || user?.email || "User"}!`}
@@ -267,12 +267,6 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           <Button
             text="🏆 Leaderboard"
             onPress={() => navigation.navigate("Leaderboard")}
-            style={themed($actionButton)}
-            preset="reversed"
-          />
-          <Button
-            text="🧪 Test APIs"
-            onPress={handleTestAPIs}
             style={themed($actionButton)}
             preset="reversed"
           />

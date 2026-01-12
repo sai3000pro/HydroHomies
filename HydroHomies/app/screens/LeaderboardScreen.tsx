@@ -1,6 +1,6 @@
 import { FC, useEffect, useState } from "react"
 import { View, ViewStyle, TextStyle, FlatList, RefreshControl, Pressable } from "react-native"
-import { collection, query, where, onSnapshot, Timestamp, getDocs } from "firebase/firestore"
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore" // Removed onSnapshot
 
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
@@ -19,6 +19,47 @@ interface LeaderboardItem extends LeaderboardEntry {
   pet?: PetState
 }
 
+// --- HARDCODED DATA START ---
+const MOCK_LEADERBOARD: LeaderboardItem[] = [
+  {
+    userId: "fake-1",
+    displayName: "AquaMan_99",
+    totalHydration: 3200,
+    percentageOfGoal: 106,
+    petHealth: 100,
+    rank: 1,
+    pet: { health: 100, stage: 2, type: "turtle", experience: 500, lastFed: null },
+  },
+  {
+    userId: "fake-2",
+    displayName: "SarahSips",
+    totalHydration: 2800,
+    percentageOfGoal: 95,
+    petHealth: 90,
+    rank: 2,
+    pet: { health: 90, stage: 1, type: "turtle", experience: 300, lastFed: null },
+  },
+  {
+    userId: "fake-3",
+    displayName: "HydroHomie_X",
+    totalHydration: 2100,
+    percentageOfGoal: 84,
+    petHealth: 85,
+    rank: 3,
+    pet: { health: 85, stage: 1, type: "turtle", experience: 150, lastFed: null },
+  },
+  {
+    userId: "fake-4",
+    displayName: "DehydratedDave",
+    totalHydration: 500,
+    percentageOfGoal: 20,
+    petHealth: 30,
+    rank: 5,
+    pet: { health: 30, stage: 0, type: "turtle", experience: 20, lastFed: null },
+  },
+]
+// --- HARDCODED DATA END ---
+
 export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
   const user = authService.getCurrentUser()
@@ -29,89 +70,82 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
 
   useEffect(() => {
     loadLeaderboard()
-    const unsubscribe = subscribeToLeaderboard()
-    return unsubscribe
   }, [])
-
-  const subscribeToLeaderboard = () => {
-    // Subscribe to all users for leaderboard
-    // In production, you'd maintain a daily summary collection for better performance
-    const usersRef = collection(db, "users")
-
-    return onSnapshot(usersRef, async (snapshot) => {
-      const leaderboardItems: LeaderboardItem[] = []
-
-      // Calculate leaderboard for each user
-      for (const userDoc of snapshot.docs) {
-        const userData = userDoc.data()
-        const userId = userData.uid
-
-        // Get today's hydration entries
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const todayStart = Timestamp.fromDate(today)
-
-        const entriesQuery = query(
-          collection(db, "hydrationEntries"),
-          where("userId", "==", userId),
-          where("timestamp", ">=", todayStart),
-        )
-
-        // Use getDocs for one-time fetch instead of subscription
-        const entriesSnapshot = await getDocs(entriesQuery)
-
-        const hydrationEntries = entriesSnapshot.docs.map((doc) => doc.data())
-        const totalHydration = hydrationEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0)
-
-        const dailyGoal = userData.stats?.dailyWaterGoal || 2500
-        const percentageOfGoal = dailyGoal > 0 ? Math.round((totalHydration / dailyGoal) * 100) : 0
-
-        // Get pet state
-        let pet: PetState | null = null
-        try {
-          pet = await databaseService.getPet(userId)
-        } catch (error) {
-          console.error("Error fetching pet:", error)
-        }
-
-        leaderboardItems.push({
-          userId,
-          displayName: userData.displayName || userData.email || "Anonymous",
-          totalHydration,
-          percentageOfGoal,
-          petHealth: pet?.health || 0,
-          rank: 0, // Will be set after sorting
-          pet: pet || undefined,
-        })
-      }
-
-      // Sort by total hydration (descending)
-      leaderboardItems.sort((a, b) => b.totalHydration - a.totalHydration)
-
-      // Assign ranks
-      leaderboardItems.forEach((item, index) => {
-        item.rank = index + 1
-      })
-
-      setEntries(leaderboardItems)
-
-      // Find current user's rank
-      if (user) {
-        const userEntry = leaderboardItems.find((item) => item.userId === user.uid)
-        if (userEntry) {
-          setCurrentUserRank(userEntry.rank)
-        }
-      }
-    })
-  }
 
   const loadLeaderboard = async () => {
     setIsRefreshing(true)
+
+    // 1. Start with Mock Data immediately
+    let allItems: LeaderboardItem[] = [...MOCK_LEADERBOARD]
+
     try {
-      // The subscription will handle updates
-      setIsRefreshing(false)
+      // 2. Try to fetch Real User Data (Wrapped in its own try/catch)
+      if (user) {
+        try {
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const todayStart = Timestamp.fromDate(today)
+
+          const entriesQuery = query(
+            collection(db, "hydrationEntries"),
+            where("userId", "==", user.uid),
+            where("timestamp", ">=", todayStart),
+          )
+
+          // This line often crashes if an Index is missing in Firebase Console
+          const entriesSnapshot = await getDocs(entriesQuery)
+          const hydrationEntries = entriesSnapshot.docs.map((doc) => doc.data())
+          const totalHydration = hydrationEntries.reduce(
+            (sum, entry) => sum + (entry.amount || 0),
+            0,
+          )
+
+          const userDoc = await databaseService.getUser(user.uid)
+          const dailyGoal = userDoc?.stats?.dailyWaterGoal || 2500
+          const percentageOfGoal =
+            dailyGoal > 0 ? Math.round((totalHydration / dailyGoal) * 100) : 0
+
+          let pet: PetState | null = null
+          try {
+            pet = await databaseService.getPet(user.uid)
+          } catch (e) {
+            console.log("Pet fetch failed")
+          }
+
+          // Push REAL user to the list
+          allItems.push({
+            userId: user.uid,
+            displayName: user.displayName || "You",
+            totalHydration,
+            percentageOfGoal,
+            petHealth: pet?.health || 0,
+            rank: 0,
+            pet: pet || undefined,
+          })
+        } catch (firebaseError) {
+          console.warn("⚠️ Firebase Error (Leaderboard still works):", firebaseError)
+          // If fetching real user fails, we just show the mock data!
+        }
+      }
+
+      // 3. Sort & Rank (Runs whether Firebase worked or not)
+      allItems.sort((a, b) => b.totalHydration - a.totalHydration)
+
+      allItems.forEach((item, index) => {
+        item.rank = index + 1
+      })
+
+      setEntries(allItems)
+
+      if (user) {
+        const userEntry = allItems.find((item) => item.userId === user.uid)
+        if (userEntry) setCurrentUserRank(userEntry.rank)
+      }
     } catch (error) {
-      console.error("Error loading leaderboard:", error)
+      console.error("Critical error:", error)
+      // Emergency Fallback
+      setEntries(MOCK_LEADERBOARD)
+    } finally {
       setIsRefreshing(false)
     }
   }
@@ -121,6 +155,12 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
     const isTopThree = index < 3
 
     const handleItemPress = () => {
+      // Only navigate if it's a real user (or handle fake users differently if you want)
+      if (item.userId.startsWith("fake-")) {
+        alert(`That's ${item.displayName}! They are drinking lots of water!`)
+        return
+      }
+
       navigation.navigate("FriendPet", {
         userId: item.userId,
         displayName: item.displayName,
@@ -144,11 +184,14 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
           )}
         </View>
 
-        {item.pet && (
-          <View style={themed($petContainer)}>
+        {/* --- ADDED DEFAULT PET ICON IF MISSING --- */}
+        <View style={themed($petContainer)}>
+          {item.pet ? (
             <Pet pet={item.pet} size="small" />
-          </View>
-        )}
+          ) : (
+            <Text text="🐢" style={{ fontSize: 24 }} />
+          )}
+        </View>
 
         <View style={themed($infoContainer)}>
           <Text
@@ -210,11 +253,6 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
             onRefresh={loadLeaderboard}
             tintColor={theme.colors.palette.accent500}
           />
-        }
-        ListEmptyComponent={
-          <View style={themed($emptyContainer)}>
-            <Text text="No entries yet. Be the first to log water!" />
-          </View>
         }
       />
 
