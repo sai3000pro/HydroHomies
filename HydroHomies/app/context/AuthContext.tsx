@@ -13,6 +13,7 @@ import { onAuthStateChanged, User } from "firebase/auth"
 import { authService } from "@/services/firebase/auth"
 import { auth } from "@/services/firebase/config"
 import { databaseService, type PetState, type UserProfile } from "@/services/firebase/database"
+import { cancelReminders } from "@/services/reminders"
 
 export type AuthContextType = {
   user: User | null
@@ -109,6 +110,7 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
   }, [user])
 
   const logout = useCallback(async () => {
+    await cancelReminders().catch(() => {})
     await authService.signOut()
   }, [])
 

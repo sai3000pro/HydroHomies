@@ -5,12 +5,15 @@
  * pets/{uid}             the user's pet (public to signed-in users)
  * hydrationEntries/{id}  one logged drink (owner-only)
  * dailySummaries/{uid}_{YYYY-MM-DD}  per-day total + display info (public, feeds the leaderboard)
+ * friendCodes/{CODE}     short code -> user, used to add friends (get-only)
+ * users/{uid}/friends/{friendId}  mutual friend list (owner-only)
  */
 import {
   collection,
   deleteField,
   doc,
   getDoc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -20,11 +23,12 @@ import {
   setDoc,
   Timestamp,
   where,
+  writeBatch,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore"
 
-import { dailySummaryId, toDateKey } from "@/utils/dateKey"
+import { dailySummaryId, shiftDateKey, toDateKey } from "@/utils/dateKey"
 import { feedPet, isPetSpecies, type PetSpecies } from "@/utils/petEvolution"
 import { calculateDailyWaterGoal, type UserStats } from "@/utils/waterGoalCalculator"
 
@@ -39,6 +43,8 @@ export interface UserProfile {
   email: string
   username: string
   stats?: StoredUserStats
+  /** Code other users enter to add this user as a friend. Created on first visit to Friends. */
+  friendCode?: string
 }
 
 export interface PetState {
@@ -75,6 +81,36 @@ export interface DailySummary {
   petName: string | null
   petSpecies: PetSpecies | null
   petExperience: number
+  /** Pet health right after this day's latest drink. Pair with updatedAt for current health. */
+  petHealth: number
+  updatedAt: Date | null
+}
+
+export interface Friend {
+  friendId: string
+  displayName: string
+  addedAt: Date | null
+}
+
+/** Letters and digits that can't be confused with each other (no O/0, I/1) */
+const FRIEND_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+export const FRIEND_CODE_LENGTH = 6
+/** Firestore allows at most 30 values in an `in` filter */
+const IN_QUERY_LIMIT = 30
+
+export function normalizeFriendCode(input: string): string {
+  return input
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+}
+
+function randomFriendCode(): string {
+  let code = ""
+  for (let i = 0; i < FRIEND_CODE_LENGTH; i++) {
+    code += FRIEND_CODE_ALPHABET[Math.floor(Math.random() * FRIEND_CODE_ALPHABET.length)]
+  }
+  return code
 }
 
 /** Largest single drink we accept, in ml. Mirrors firestore.rules. */
@@ -102,6 +138,7 @@ export function parseUserProfile(uid: string, data: DocumentData): UserProfile {
     email: typeof data.email === "string" ? data.email : "",
     username: typeof data.username === "string" ? data.username : (data.displayName ?? ""),
     stats,
+    friendCode: typeof data.friendCode === "string" ? data.friendCode : undefined,
   }
 }
 
@@ -151,6 +188,8 @@ function parseSummary(data: DocumentData): DailySummary {
     petName: data.petName ?? null,
     petSpecies: isPetSpecies(data.petSpecies) ? data.petSpecies : null,
     petExperience: num(data.petExperience),
+    petHealth: num(data.petHealth, 100),
+    updatedAt: toDate(data.updatedAt),
   }
 }
 
@@ -289,9 +328,11 @@ export const databaseService = {
       })
 
       let petExperience = 0
+      let petHealth = 100
       if (pet) {
         const fed = feedPet(pet, amount, goalMl)
         petExperience = fed.experience
+        petHealth = fed.health
         tx.update(petRef, {
           experience: fed.experience,
           health: fed.health,
@@ -312,6 +353,7 @@ export const databaseService = {
         petName: pet?.name ?? null,
         petSpecies: pet?.species ?? null,
         petExperience,
+        petHealth,
         updatedAt: serverTimestamp(),
       })
 
@@ -370,5 +412,148 @@ export const databaseService = {
       limit(limitCount),
     )
     return onSnapshot(q, (snap) => cb(snap.docs.map((d) => parseSummary(d.data()))), onError)
+  },
+
+  /**
+   * Today's totals for a set of users (you plus your friends), highest first.
+   * Splits into several queries because `in` accepts at most 30 values.
+   */
+  subscribeToGroupLeaderboard(
+    userIds: string[],
+    cb: (rows: DailySummary[]) => void,
+    onError?: (e: Error) => void,
+  ): Unsubscribe {
+    const ids = [...new Set(userIds)]
+    if (ids.length === 0) {
+      cb([])
+      return () => {}
+    }
+    const dateKey = toDateKey()
+    const chunks: string[][] = []
+    for (let i = 0; i < ids.length; i += IN_QUERY_LIMIT)
+      chunks.push(ids.slice(i, i + IN_QUERY_LIMIT))
+    const results: (DailySummary[] | undefined)[] = chunks.map(() => undefined)
+    const unsubs = chunks.map((chunk, i) =>
+      onSnapshot(
+        query(
+          collection(db, "dailySummaries"),
+          where("dateKey", "==", dateKey),
+          where("userId", "in", chunk),
+        ),
+        (snap) => {
+          results[i] = snap.docs.map((d) => parseSummary(d.data()))
+          // Wait until every chunk has answered once, so the list doesn't flicker
+          if (results.every((r) => r !== undefined)) {
+            cb(results.flatMap((r) => r ?? []).sort((a, b) => b.totalMl - a.totalMl))
+          }
+        },
+        onError,
+      ),
+    )
+    return () => unsubs.forEach((u) => u())
+  },
+
+  // ---------- History ----------
+
+  /**
+   * The user's daily summaries for the last `days` days (including today), oldest first.
+   * Requires the (userId ASC, dateKey ASC) index in firestore.indexes.json.
+   */
+  async getSummaryHistory(userId: string, days: number): Promise<DailySummary[]> {
+    const from = shiftDateKey(toDateKey(), -(days - 1))
+    const snap = await getDocs(
+      query(
+        collection(db, "dailySummaries"),
+        where("userId", "==", userId),
+        where("dateKey", ">=", from),
+        orderBy("dateKey", "asc"),
+      ),
+    )
+    return snap.docs.map((d) => parseSummary(d.data()))
+  },
+
+  // ---------- Friends ----------
+
+  /** Returns the user's friend code, creating one the first time. */
+  async ensureFriendCode(profile: UserProfile): Promise<string> {
+    if (profile.friendCode) return profile.friendCode
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = randomFriendCode()
+      const ref = doc(db, "friendCodes", code)
+      try {
+        await runTransaction(db, async (tx) => {
+          if ((await tx.get(ref)).exists()) throw new Error("taken")
+          tx.set(ref, {
+            userId: profile.uid,
+            displayName: profile.username.slice(0, 24),
+            createdAt: serverTimestamp(),
+          })
+        })
+      } catch (e: any) {
+        if (e?.message === "taken") continue
+        throw e
+      }
+      await setDoc(doc(db, "users", profile.uid), { friendCode: code }, { merge: true })
+      return code
+    }
+    throw new Error("Couldn't create a friend code. Try again.")
+  },
+
+  /** Adds the owner of `rawCode` as a friend, on both users' lists. Returns their name. */
+  async addFriendByCode(profile: UserProfile, rawCode: string): Promise<string> {
+    const code = normalizeFriendCode(rawCode)
+    if (code.length !== FRIEND_CODE_LENGTH) {
+      throw new Error(`Friend codes are ${FRIEND_CODE_LENGTH} letters and numbers.`)
+    }
+    const codeSnap = await getDoc(doc(db, "friendCodes", code))
+    if (!codeSnap.exists()) throw new Error("No one has that friend code.")
+    const { userId: friendId, displayName } = codeSnap.data() as {
+      userId: string
+      displayName: string
+    }
+    if (friendId === profile.uid) throw new Error("That's your own code.")
+
+    const mine = doc(db, "users", profile.uid, "friends", friendId)
+    if ((await getDoc(mine)).exists()) throw new Error(`${displayName} is already your friend.`)
+
+    const batch = writeBatch(db)
+    batch.set(mine, { friendId, displayName, code, addedAt: serverTimestamp() })
+    batch.set(doc(db, "users", friendId, "friends", profile.uid), {
+      friendId: profile.uid,
+      displayName: (profile.username || "Anonymous").slice(0, 24),
+      code,
+      addedAt: serverTimestamp(),
+    })
+    await batch.commit()
+    return displayName
+  },
+
+  /** Ends the friendship on both sides */
+  async removeFriend(userId: string, friendId: string) {
+    const batch = writeBatch(db)
+    batch.delete(doc(db, "users", userId, "friends", friendId))
+    batch.delete(doc(db, "users", friendId, "friends", userId))
+    await batch.commit()
+  },
+
+  subscribeToFriends(
+    userId: string,
+    cb: (friends: Friend[]) => void,
+    onError?: (e: Error) => void,
+  ): Unsubscribe {
+    return onSnapshot(
+      collection(db, "users", userId, "friends"),
+      (snap) =>
+        cb(
+          snap.docs
+            .map((d) => ({
+              friendId: d.id,
+              displayName: d.data().displayName || "Anonymous",
+              addedAt: toDate(d.data().addedAt),
+            }))
+            .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+        ),
+      onError,
+    )
   },
 }

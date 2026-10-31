@@ -12,6 +12,42 @@ service cloud.firestore {
         && request.resource.data.get('username', '') is string
         && request.resource.data.get('username', '').size() <= 24;
       allow delete: if false;
+
+      // Friends: users/{uid}/friends/{friendId}. Adding is mutual, so A writes both
+      // A/friends/B and B/friends/A. Both docs carry B's friend code, which proves A knows it.
+      match /friends/{friendId} {
+        function codeOwner(code) {
+          return get(/databases/$(database)/documents/friendCodes/$(code)).data.userId;
+        }
+        allow read: if isOwner(uid);
+        allow create: if signedIn()
+          && friendId != uid
+          && request.resource.data.friendId == friendId
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() <= 24
+          && request.resource.data.code is string
+          && (
+            // My own list: I know their code
+            (request.auth.uid == uid && codeOwner(request.resource.data.code) == friendId)
+            // Their list: they're adding me, and the code is theirs
+            || (request.auth.uid == friendId && codeOwner(request.resource.data.code) == uid)
+          );
+        // Either side can end the friendship
+        allow delete: if isOwner(uid) || (signedIn() && request.auth.uid == friendId);
+        allow update: if false;
+      }
+    }
+
+    // friendCodes/{CODE}: public lookup from a short code to a user. Get only, so codes can't be listed.
+    match /friendCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 24
+        && code.matches('^[A-Z0-9]{6}$');
+      allow update, delete: if false;
     }
 
     // Pets are public to signed-in users (leaderboard, friend view).

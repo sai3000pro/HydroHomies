@@ -7,6 +7,14 @@
         { "fieldPath": "dateKey", "order": "ASCENDING" },
         { "fieldPath": "totalMl", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "dailySummaries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "dateKey", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

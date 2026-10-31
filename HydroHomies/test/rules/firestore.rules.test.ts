@@ -358,3 +358,167 @@ describe("leaderboard", () => {
     await expect(firstSnapshot()).rejects.toMatchObject({ code: "permission-denied" })
   })
 })
+
+describe("friends", () => {
+  async function withCode(uid: string): Promise<string> {
+    await seed(`users/${uid}`, { username: uid })
+    actAs(uid)
+    return databaseService.ensureFriendCode(profileFor(uid))
+  }
+
+  it("creates a friend code once and stores it on the profile", async () => {
+    const code = await withCode("alice")
+    expect(code).toMatch(/^[A-Z0-9]{6}$/)
+    expect(await read(`friendCodes/${code}`)).toMatchObject({ userId: "alice" })
+    expect((await read("users/alice"))?.friendCode).toBe(code)
+  })
+
+  it("adds a friend on both lists", async () => {
+    const bobCode = await withCode("bob")
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    await expect(
+      databaseService.addFriendByCode(profileFor("alice"), bobCode.toLowerCase()),
+    ).resolves.toBe("bob")
+    expect(await read("users/alice/friends/bob")).toMatchObject({ friendId: "bob" })
+    expect(await read("users/bob/friends/alice")).toMatchObject({
+      friendId: "alice",
+      displayName: "alice",
+    })
+  })
+
+  it("rejects unknown codes, your own code and duplicates", async () => {
+    const bobCode = await withCode("bob")
+    const aliceCode = await withCode("alice")
+    actAs("alice")
+    await expect(databaseService.addFriendByCode(profileFor("alice"), "ZZZZZZ")).rejects.toThrow(
+      /No one/,
+    )
+    await expect(databaseService.addFriendByCode(profileFor("alice"), aliceCode)).rejects.toThrow(
+      /own code/,
+    )
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    await expect(databaseService.addFriendByCode(profileFor("alice"), bobCode)).rejects.toThrow(
+      /already/,
+    )
+  })
+
+  it("blocks adding yourself to someone's list without their code", async () => {
+    await withCode("bob")
+    const malloryCode = await withCode("mallory")
+    const db = actAs("mallory")
+    // Mallory's own code doesn't prove she knows Bob's
+    await assertFails(
+      setDoc(doc(db, "users/bob/friends/mallory"), {
+        friendId: "mallory",
+        displayName: "mallory",
+        code: malloryCode,
+      }),
+    )
+    await assertFails(
+      setDoc(doc(db, "users/mallory/friends/bob"), {
+        friendId: "bob",
+        displayName: "bob",
+        code: malloryCode,
+      }),
+    )
+  })
+
+  it("blocks taking over someone else's friend code", async () => {
+    const bobCode = await withCode("bob")
+    const db = actAs("mallory")
+    await assertFails(
+      setDoc(doc(db, "friendCodes", bobCode), { userId: "mallory", displayName: "m" }),
+    )
+    await assertFails(setDoc(doc(db, "friendCodes", "MALLRY"), { userId: "bob", displayName: "b" }))
+  })
+
+  it("doesn't let anyone list friend codes or read others' friend lists", async () => {
+    const bobCode = await withCode("bob")
+    await withCode("alice")
+    actAs("alice")
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    const db = actAs("mallory")
+    await assertFails(getDocs(collection(db, "friendCodes")))
+    await assertFails(getDocs(collection(db, "users/alice/friends")))
+    await assertSucceeds(getDocs(collection(actAs("alice"), "users/alice/friends")))
+  })
+
+  it("lets either friend remove the friendship on both sides", async () => {
+    const bobCode = await withCode("bob")
+    await withCode("alice")
+    actAs("alice")
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    actAs("bob")
+    await assertSucceeds(databaseService.removeFriend("bob", "alice"))
+    expect(await read("users/alice/friends/bob")).toBeUndefined()
+    expect(await read("users/bob/friends/alice")).toBeUndefined()
+  })
+
+  it("blocks a stranger from deleting a friendship", async () => {
+    const bobCode = await withCode("bob")
+    await withCode("alice")
+    actAs("alice")
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    actAs("mallory")
+    await assertFails(databaseService.removeFriend("alice", "bob"))
+  })
+
+  it("shows a friends-only leaderboard", async () => {
+    for (const uid of ["alice", "bob", "carol"]) await seed(`users/${uid}`, { username: uid })
+    actAs("alice")
+    await logDrink("alice", 400)
+    actAs("bob")
+    await logDrink("bob", 900)
+    actAs("carol")
+    await logDrink("carol", 2000)
+
+    actAs("alice")
+    const rows = await new Promise<DailySummary[]>((res, rej) => {
+      const unsub = databaseService.subscribeToGroupLeaderboard(
+        ["alice", "bob"],
+        (r) => {
+          unsub()
+          res(r)
+        },
+        rej,
+      )
+    })
+    expect(rows.map((r) => r.userId)).toEqual(["bob", "alice"])
+  })
+})
+
+describe("history and pet health on summaries", () => {
+  it("loads your recent daily summaries", async () => {
+    await seed("users/alice", { username: "alice" })
+    const today = toDateKey()
+    await seed(`dailySummaries/alice_2000-01-01`, {
+      userId: "alice",
+      dateKey: "2000-01-01",
+      totalMl: 1,
+    })
+    actAs("alice")
+    await logDrink("alice", 700)
+    const history = await databaseService.getSummaryHistory("alice", 7)
+    expect(history.map((h) => [h.dateKey, h.totalMl])).toEqual([[today, 700]])
+  })
+
+  it("stores the pet's health after the drink", async () => {
+    await seed("users/alice", { username: "alice" })
+    await seed("pets/alice", {
+      userId: "alice",
+      species: "alien",
+      name: "Zap",
+      experience: 0,
+      health: 20,
+    })
+    actAs("alice")
+    await logDrink("alice", 1250) // half of a 2500 ml goal restores 50 health
+    const summary = await read(dailySummaryPath("alice"))
+    expect(summary).toMatchObject({ petHealth: 70 })
+  })
+})
+
+function dailySummaryPath(uid: string) {
+  return `dailySummaries/${dailySummaryId(uid, toDateKey())}`
+}

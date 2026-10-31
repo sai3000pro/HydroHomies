@@ -138,9 +138,9 @@
     "semantic_hash": ""
   },
   "context/AuthContext.tsx": {
-    "mtime": 1793462243.8864243,
-    "seen": 1793465733.4516559,
-    "ast_hash": "2ab1d8314a04b7b8d17d43f2c1539375",
+    "mtime": 1793471174.2558181,
+    "seen": 1793471469.2939777,
+    "ast_hash": "dbb66d1dc7179cf0347f2a7ad4424785",
     "semantic_hash": ""
   },
   "devtools/ReactotronClient.ts": {
@@ -216,15 +216,15 @@
     "semantic_hash": ""
   },
   "navigators/AppNavigator.tsx": {
-    "mtime": 1793462243.8954217,
-    "seen": 1793465733.4516559,
-    "ast_hash": "7251939f4247f4c57e771de6ad520657",
+    "mtime": 1793471174.2558181,
+    "seen": 1793471469.2939777,
+    "ast_hash": "8fd1a69ac89c3cb115821c3afc489673",
     "semantic_hash": ""
   },
   "navigators/navigationTypes.ts": {
-    "mtime": 1793462243.8954217,
-    "seen": 1793465733.4516559,
-    "ast_hash": "ab2220e2b55df80d1ea9d3ba28846ccb",
+    "mtime": 1793471174.2558181,
+    "seen": 1793471469.2939777,
+    "ast_hash": "e4ea4aff13cefec7355893af2ce42b7c",
     "semantic_hash": ""
   },
   "navigators/navigationUtilities.ts": {
@@ -252,15 +252,15 @@
     "semantic_hash": ""
   },
   "screens/HomeScreen.tsx": {
-    "mtime": 1793462243.8964198,
-    "seen": 1793465733.4516559,
-    "ast_hash": "7fb7ee39e17edd05c857229a8a81c4f9",
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "b3d7fc44f2782696d7b52601a599eb38",
     "semantic_hash": ""
   },
   "screens/LeaderboardScreen.tsx": {
-    "mtime": 1793462243.8964198,
-    "seen": 1793465733.4516559,
-    "ast_hash": "e265d08c4c3f759a559cb3757a1b4a53",
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "0279c27e20f8c84c1651961300c76b0f",
     "semantic_hash": ""
   },
   "screens/LoginScreen.tsx": {
@@ -306,9 +306,9 @@
     "semantic_hash": ""
   },
   "services/firebase/database.ts": {
-    "mtime": 1793469607.706958,
-    "seen": 1793469709.8787782,
-    "ast_hash": "b49ac303523ab8d512716667a7ac0467",
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "305563daf195df632cfbcffcd1d51f39",
     "semantic_hash": ""
   },
   "services/ml/tfjsRN.native.ts": {
@@ -480,9 +480,9 @@
     "semantic_hash": ""
   },
   "services/vision/aiEstimate.ts": {
-    "mtime": 1793462243.9024253,
-    "seen": 1793465733.4516559,
-    "ast_hash": "1c9f32e4942a9bf75243411d80537409",
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "2da7245adff68f3e86d8472589cc4b20",
     "semantic_hash": ""
   },
   "services/vision/analyzeBottle.test.ts": {
@@ -492,9 +492,9 @@
     "semantic_hash": ""
   },
   "services/vision/analyzeBottle.ts": {
-    "mtime": 1793462243.9024253,
-    "seen": 1793465733.4526622,
-    "ast_hash": "e58a9bd213a9cd70cbfe9ddd0b21b58f",
+    "mtime": 1793471399.9255464,
+    "seen": 1793471469.2939777,
+    "ast_hash": "e7c2d77ab89a645951b041d95f9fcd2f",
     "semantic_hash": ""
   },
   "services/vision/estimate.test.ts": {
@@ -510,9 +510,9 @@
     "semantic_hash": ""
   },
   "utils/dateKey.ts": {
-    "mtime": 1793462243.905068,
-    "seen": 1793465733.4526622,
-    "ast_hash": "83fee31fb26662fac9804e6e9688cea7",
+    "mtime": 1793470905.025337,
+    "seen": 1793471469.2939777,
+    "ast_hash": "527b0abd12483af6c3f26537d50047d0",
     "semantic_hash": ""
   },
   "utils/petEvolution.test.ts": {
@@ -525,6 +525,42 @@
     "mtime": 1793462243.9060674,
     "seen": 1793465733.4526622,
     "ast_hash": "64c2d270d48a08312b1569b380b45c6c",
+    "semantic_hash": ""
+  },
+  "screens/FriendsScreen.tsx": {
+    "mtime": 1793471174.2558181,
+    "seen": 1793471469.2939777,
+    "ast_hash": "6f5d4afa085336f40e9a8a476ec89570",
+    "semantic_hash": ""
+  },
+  "screens/RemindersScreen.tsx": {
+    "mtime": 1793471122.7584925,
+    "seen": 1793471469.2939777,
+    "ast_hash": "8cba52487d4da8d13ce2e3bd55531f1f",
+    "semantic_hash": ""
+  },
+  "screens/StatsScreen.tsx": {
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "ba2f24bf6815ea55ae72a7da1f5eb6e2",
+    "semantic_hash": ""
+  },
+  "services/reminders.ts": {
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "5e55638a31892bf86a76c6f95b11a377",
+    "semantic_hash": ""
+  },
+  "utils/hydrationStats.ts": {
+    "mtime": 1793471174.2568178,
+    "seen": 1793471469.2939777,
+    "ast_hash": "d5d0106241358ce6af488627d8fc7894",
+    "semantic_hash": ""
+  },
+  "utils/useFriends.ts": {
+    "mtime": 1793470990.4738612,
+    "seen": 1793471469.2939777,
+    "ast_hash": "e5df2a2976bef9cb8a7ddff584eedaa1",
     "semantic_hash": ""
   }
 }

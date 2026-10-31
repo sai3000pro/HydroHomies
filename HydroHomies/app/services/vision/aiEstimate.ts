@@ -1,13 +1,13 @@
 /**
  * AI bottle estimate.
  *
- * Production path: the `estimateBottle` Firebase callable function, which holds
- * the OpenRouter key server-side (see functions/).
+ * If EXPO_PUBLIC_OPENROUTER_API_KEY is set, the app calls OpenRouter directly.
+ * This works on the free Spark plan. The key is embedded in the app bundle and
+ * there's no per-user rate limit, so set a spending limit on the key in OpenRouter.
  *
- * Development-only fallback: if the function isn't deployed and
- * EXPO_PUBLIC_OPENROUTER_API_KEY is set, call OpenRouter directly. EXPO_PUBLIC_*
- * values are embedded in the JS bundle, so never set that variable for a
- * release build.
+ * Without that variable, the app calls the `estimateBottle` Firebase callable
+ * function (functions/), which keeps the key server-side and rate-limits each
+ * user. Deploying it needs the Blaze plan.
  */
 import * as ImageManipulator from "expo-image-manipulator"
 import { httpsCallable } from "firebase/functions"
@@ -52,25 +52,15 @@ export async function requestAiEstimate(
   knownBottleVolume?: number | null,
 ): Promise<BottleEstimate> {
   const image = await toJpegBase64(imageUri)
-  try {
-    const { data } = await estimateBottleFn({
-      image,
-      phase,
-      bottleVolume: knownBottleVolume ?? null,
-    })
-    return data
-  } catch (error: any) {
-    if (__DEV__) {
-      const devKey = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY
-      if (devKey) {
-        console.warn(
-          `estimateBottle function failed (${error?.code ?? error?.message}); using dev-only direct OpenRouter call`,
-        )
-        return callOpenRouterDirect(devKey, image, phase, knownBottleVolume)
-      }
-    }
-    throw error
-  }
+  const directKey = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY
+  if (directKey) return callOpenRouterDirect(directKey, image, phase, knownBottleVolume)
+
+  const { data } = await estimateBottleFn({
+    image,
+    phase,
+    bottleVolume: knownBottleVolume ?? null,
+  })
+  return data
 }
 
 async function callOpenRouterDirect(

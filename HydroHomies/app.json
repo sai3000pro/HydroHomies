@@ -61,7 +61,8 @@
         "cameraPermission": "Allow HydroHype to access your camera to scan water bottles and verify hydration."
       }
     ],
-    "expo-build-properties"
+    "expo-build-properties",
+    "expo-notifications"
   ],
   "experiments": {
     "tsconfigPaths": true

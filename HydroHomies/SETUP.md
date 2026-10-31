@@ -42,16 +42,24 @@ The app is wired to the `hydrohype-9fa73` project (see `.firebaserc`). To use yo
 | `users` | `{uid}` | owner | email, username, body stats, daily goal |
 | `pets` | `{uid}` | any signed-in user | name, species, experience, health, lastFed |
 | `hydrationEntries` | auto | owner | one logged drink: amount, before/after volume, source |
-| `dailySummaries` | `{uid}_{YYYY-MM-DD}` | any signed-in user | day total, goal, display name, pet summary (drives the leaderboard) |
-| `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting |
+| `dailySummaries` | `{uid}_{YYYY-MM-DD}` | any signed-in user | day total, goal, display name, pet summary incl. health (drives the leaderboard and stats) |
+| `friendCodes` | 6-character code | signed-in users, by exact code only | the code's owner and display name |
+| `users/{uid}/friends` | friend's uid | owner | friend's display name. Adding a friend writes both users' lists |
+| `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting (only used by the Cloud Function) |
 
 Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`).
+
+**Friends.** Each user gets a friend code the first time they open Friends. Entering someone's code adds you to each other's lists. The rules only allow that write if the code really belongs to the other user, so nobody can add themselves without the code. Either friend can remove the friendship. The leaderboard has a Friends tab (you plus your friends) and an Everyone tab.
+
+**Stats and achievements** are computed on the device from the last 60 days of `dailySummaries` and the pet's XP. Nothing extra is stored. The history query needs the `(userId, dateKey)` index in `firestore.indexes.json`, so run `npm run deploy:firestore` after pulling this.
+
+**Reminders** are local notifications (`expo-notifications`); no server is involved. They're scheduled for the next 3 days and refreshed whenever Home opens. Once today's goal is reached, the rest of today's reminders are dropped. Settings are stored on the device.
 
 Accounts created by the hackathon build stored the pet at `users/{uid}.pet`. It's moved to `pets/{uid}` automatically the next time that user signs in.
 
 ### Testing the rules
 
-`test/rules/firestore.rules.test.ts` runs the real `databaseService` against the Firestore emulator with `firestore.rules` loaded. It covers sign-up, adopting a pet, legacy-pet migration, logging drinks (first and later drinks of the day) and the leaderboard. Run it before every rules deploy:
+`test/rules/firestore.rules.test.ts` runs the real `databaseService` against the Firestore emulator with `firestore.rules` loaded. It covers sign-up, adopting a pet, legacy-pet migration, logging drinks (first and later drinks of the day), friends and friend codes, history and both leaderboards. Run it before every rules deploy:
 
 ```bash
 npm run test:rules
@@ -59,22 +67,20 @@ npm run test:rules
 
 The emulator needs **Java 21+** on `PATH`. `npm test` skips these tests because they need the emulator.
 
-## 3. AI bottle estimate (Cloud Function)
+## 3. AI bottle estimate
 
-`functions/` holds a callable function, `estimateBottle`. It sends the photo to a vision model on [OpenRouter](https://openrouter.ai) and returns the bottle size, the water volume and a confidence score. The API key stays on the server. Each user gets 60 calls per day, and each scan uses two.
+The scan screen sends each photo to a vision model on [OpenRouter](https://openrouter.ai), which returns the bottle size, the water volume and a confidence score. There are two ways to connect it.
 
-Cloud Functions require the Blaze (pay-as-you-go) plan.
+**Direct (default, works on the free Spark plan).** Copy `.env.example` to `.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. The app calls OpenRouter itself. The key is embedded in the app bundle and there's no per-user rate limit, so set a monthly spending limit on the key in OpenRouter. Restart `npm start` after editing `.env`. To change the model, set `EXPO_PUBLIC_OPENROUTER_MODEL` (default `google/gemini-2.5-flash`).
+
+**Cloud Function (needs the Blaze plan).** Leave `EXPO_PUBLIC_OPENROUTER_API_KEY` unset and deploy `functions/`. The `estimateBottle` function keeps the key on the server and allows each user 60 calls per day (each scan uses two).
 
 ```bash
 npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project hydrohype-9fa73
 npm run deploy:functions
 ```
 
-The default model is `google/gemini-2.5-flash`. To change it, set `OPENROUTER_MODEL` in `functions/.env`.
-
-**Local development without deploying.** If you set `EXPO_PUBLIC_OPENROUTER_API_KEY` in `.env`, **dev builds** call OpenRouter directly whenever the function call fails. `EXPO_PUBLIC_*` values are embedded in the app bundle, so never set this for a release build. The code ignores it outside `__DEV__`.
-
-If neither path is available, the scan screen falls back to the on-device model or to manual entry. Logging still works.
+If neither is set up, the scan screen falls back to the on-device model or to manual entry. Logging still works.
 
 ## 4. Run
 
@@ -84,7 +90,7 @@ npm run android      # dev build on a device/emulator (enables the on-device mod
 npm run ios
 ```
 
-Camera scanning needs a physical device. On an emulator, use **Gallery**.
+Camera scanning needs a physical device. On an emulator, use **Gallery**. `expo-notifications` (reminders) is a native module, so rebuild the dev build once after pulling (`npm run android`).
 
 ## 5. On-device model (optional)
 
@@ -104,6 +110,7 @@ To retrain, see `../ml_training/README.md`, then run `bash ../ml_training/setup_
 npm run compile      # TypeScript
 npm run lint:check   # ESLint + Prettier
 npm test             # Jest: goal formula, pet rules, estimate parsing, storage, i18n keys
+npm run test:rules   # Firestore rules against the emulator (needs Java 21+)
 npm run model:verify
 npm run test:maestro # E2E; needs a dev build and -e TEST_EMAIL=... -e TEST_PASSWORD=...
 ```

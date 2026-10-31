@@ -17,7 +17,7 @@ export interface BottleReading {
 
 /**
  * Estimates the water in a bottle photo. Tries, in order:
- *   1. AI estimate (Firebase function -> OpenRouter vision model)
+ *   1. AI estimate (OpenRouter vision model, directly or via the Firebase function)
  *   2. On-device level classifier (before photo only; it has no "empty" class)
  *   3. Manual entry with a sensible default
  */

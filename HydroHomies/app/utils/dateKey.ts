@@ -6,6 +6,19 @@ export function toDateKey(date: Date = new Date()): string {
   return `${y}-${m}-${d}`
 }
 
+/** Parses "YYYY-MM-DD" as local midnight */
+export function fromDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+
+/** The date key `days` days after (or before, if negative) `key` */
+export function shiftDateKey(key: string, days: number): string {
+  const date = fromDateKey(key)
+  date.setDate(date.getDate() + days)
+  return toDateKey(date)
+}
+
 /** Document id for a user's daily summary */
 export function dailySummaryId(userId: string, dateKey: string = toDateKey()): string {
   return `${userId}_${dateKey}`

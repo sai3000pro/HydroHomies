@@ -3,7 +3,7 @@
  *   signed out            -> Login, SignUp
  *   no body stats         -> Onboarding
  *   no pet                -> PetSelect
- *   ready                 -> Home, ScanBottle, Leaderboard, FriendPet
+ *   ready                 -> Home, ScanBottle, Leaderboard, Friends, Stats, Reminders, FriendPet
  * Changing state (e.g. adopting a pet) swaps the stack automatically.
  */
 import { ActivityIndicator, View, ViewStyle } from "react-native"
@@ -14,13 +14,16 @@ import Config from "@/config"
 import { useAuth } from "@/context/AuthContext"
 import { ErrorBoundary } from "@/screens/ErrorScreen/ErrorBoundary"
 import { FriendPetScreen } from "@/screens/FriendPetScreen"
+import { FriendsScreen } from "@/screens/FriendsScreen"
 import { HomeScreen } from "@/screens/HomeScreen"
 import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
 import { LoginScreen } from "@/screens/LoginScreen"
 import { OnboardingScreen } from "@/screens/OnboardingScreen"
 import { PetSelectScreen } from "@/screens/PetSelectScreen"
+import { RemindersScreen } from "@/screens/RemindersScreen"
 import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
 import { SignUpScreen } from "@/screens/SignUpScreen"
+import { StatsScreen } from "@/screens/StatsScreen"
 import { useAppTheme } from "@/theme/context"
 
 import type { AppStackParamList, NavigationProps } from "./navigationTypes"
@@ -66,6 +69,9 @@ const AppStack = () => {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="ScanBottle" component={ScanBottleScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+          <Stack.Screen name="Friends" component={FriendsScreen} />
+          <Stack.Screen name="Stats" component={StatsScreen} />
+          <Stack.Screen name="Reminders" component={RemindersScreen} />
           <Stack.Screen name="FriendPet" component={FriendPetScreen} />
         </>
       )}

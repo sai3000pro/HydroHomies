@@ -11,6 +11,7 @@ import { databaseService, type DailySummary } from "@/services/firebase/database
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { levelForXp } from "@/utils/petEvolution"
+import { useFriends } from "@/utils/useFriends"
 import { shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface LeaderboardScreenProps extends AppStackScreenProps<"Leaderboard"> {}
@@ -20,21 +21,27 @@ const MEDALS = ["🥇", "🥈", "🥉"]
 export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
   const { profile } = useSignedInUser()
+  const { friends } = useFriends(profile.uid)
 
+  const [scope, setScope] = useState<"friends" | "everyone">("friends")
   const [rows, setRows] = useState<DailySummary[] | null>(null)
   const [error, setError] = useState("")
 
-  useEffect(
-    () =>
-      databaseService.subscribeToLeaderboard(
-        (r) => {
-          setRows(r)
-          setError("")
-        },
-        (e) => setError(e.message),
-      ),
-    [],
-  )
+  // Re-subscribe only when the set of friend ids changes, not on every snapshot
+  const friendIdsKey = friends?.map((f) => f.friendId).join(",") ?? null
+
+  useEffect(() => {
+    setRows(null)
+    const onRows = (r: DailySummary[]) => {
+      setRows(r)
+      setError("")
+    }
+    const onError = (e: Error) => setError(e.message)
+    if (scope === "everyone") return databaseService.subscribeToLeaderboard(onRows, onError)
+    if (friendIdsKey === null) return undefined
+    const ids = [profile.uid, ...(friendIdsKey ? friendIdsKey.split(",") : [])]
+    return databaseService.subscribeToGroupLeaderboard(ids, onRows, onError)
+  }, [scope, friendIdsKey, profile.uid])
 
   const myRank = rows ? rows.findIndex((r) => r.userId === profile.uid) + 1 : 0
 
@@ -64,8 +71,8 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
               name: item.petName ?? "",
               species: item.petSpecies,
               experience: item.petExperience,
-              health: 100,
-              lastFed: null,
+              health: item.petHealth,
+              lastFed: item.updatedAt,
             }}
           />
         ) : (
@@ -112,6 +119,19 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
         <Button text="Close" onPress={() => navigation.goBack()} />
       </View>
 
+      <View style={themed($tabs)}>
+        {(["friends", "everyone"] as const).map((s) => (
+          <Button
+            key={s}
+            text={s === "friends" ? "Friends" : "Everyone"}
+            preset={scope === s ? "reversed" : "default"}
+            style={$flex}
+            onPress={() => setScope(s)}
+            accessibilityState={{ selected: scope === s }}
+          />
+        ))}
+      </View>
+
       {!!error && (
         <Text size="sm" style={{ color: theme.colors.error }} text={`Couldn't load: ${error}`} />
       )}
@@ -124,7 +144,16 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
           keyExtractor={(r) => r.userId}
           renderItem={renderItem}
           contentContainerStyle={themed($list)}
-          ListEmptyComponent={<Text text="Nobody has logged water today. Be the first!" />}
+          ListEmptyComponent={
+            scope === "friends" && friends?.length === 0 ? (
+              <View style={themed($empty)}>
+                <Text text="Add friends to compete with them here." />
+                <Button text="👥 Add friends" onPress={() => navigation.navigate("Friends")} />
+              </View>
+            ) : (
+              <Text text="Nobody has logged water today. Be the first!" />
+            )
+          }
           ListFooterComponent={
             <Text size="xs" style={themed($dim)} text="😏 = more than 150% of their goal today" />
           }
@@ -165,5 +194,9 @@ const $row: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   borderColor: "transparent",
   backgroundColor: colors.palette.neutral100,
 })
+
+const $tabs: ThemedStyle<ViewStyle> = ({ spacing }) => ({ flexDirection: "row", gap: spacing.sm })
+
+const $empty: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.md })
 
 const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })

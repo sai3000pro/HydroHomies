@@ -1,6 +1,8 @@
 # Handoff: HydroHype revival
 
-The hackathon app has been refactored so the pieces actually connect. Everything below was verified locally. **Nothing has been deployed to Firebase, and nothing has been run on a phone yet.**
+The hackathon app has been refactored so the pieces actually connect, and the planned features are built. Everything below was verified locally. **Nothing has been deployed to Firebase, and nothing has been run on a phone yet.**
+
+The project stays on the free **Spark** plan. Nothing here needs Blaze.
 
 Setup and architecture: [HydroHomies/SETUP.md](./HydroHomies/SETUP.md). Code map: [HydroHomies/README.md](./HydroHomies/README.md).
 
@@ -8,11 +10,15 @@ Setup and architecture: [HydroHomies/SETUP.md](./HydroHomies/SETUP.md). Code map
 
 - **One data model.** The pet lives in `pets/{uid}` with separate `species` and `experience` fields. Old pets at `users/{uid}.pet` are migrated on sign-in. All Firestore access goes through `app/services/firebase/database.ts`.
 - **Auth.** `AuthContext` subscribes live to the profile and the pet. The navigator routes on state (signed out → Login, no stats → Onboarding, no pet → PetSelect, otherwise Home). The sign-up race that could wipe stats is fixed, and logout was added.
-- **Scan flow.** You take a before photo and an after photo, and the app logs the difference. Every value can be edited. Logging writes the entry, the pet XP/health and the daily summary in one transaction. The random "simulated" detection was removed.
-- **AI estimate.** The `estimateBottle` Cloud Function in `HydroHomies/functions/` keeps the OpenRouter key server-side and rate-limits each user to 60 calls per day. There's a dev-only direct-call fallback.
+- **Scan flow.** You take a before photo and an after photo, and the app logs the difference. Every value can be edited. Logging writes the entry, the pet XP/health and the daily summary in one transaction.
+- **AI estimate.** With `EXPO_PUBLIC_OPENROUTER_API_KEY` in `HydroHomies/.env`, the app calls OpenRouter directly. That works on Spark. The optional `estimateBottle` Cloud Function in `HydroHomies/functions/` is only used when that variable is unset. There is no `.env` on this machine yet; copy `HydroHomies/.env.example`.
 - **On-device model.** The Keras 3 export couldn't load in tfjs. `scripts/patch-keras3-model.js` fixes it, and `npm run model:verify` confirms it loads and predicts.
-- **Leaderboard.** It's now real, built from `dailySummaries`, and updates live. The mock users are gone. FriendPet reads public data only.
-- **Cleanup.** Removed the Ignite demo leftovers, the unused API service, stale docs and dead i18n keys. Fixed the missing theme colors. Untracked the root `node_modules/` and `.expo/`, about 7.8k files that had been committed by accident.
+- **Friends.** Each user has a 6-character friend code (Friends screen, with a Share button). Entering a code adds you to each other's lists. The rules check that the code belongs to the other user.
+- **Leaderboard.** Friends and Everyone tabs, built from `dailySummaries`, live. Avatars now show each pet's current health (fade when thirsty).
+- **Stats.** Last 7 days as a bar chart against the goal, weekly total and average, days on goal, best day, current and best streak.
+- **Achievements.** 12 achievements on the Stats screen (first drink, goal, 3/7/30-day streaks, 10 L and 100 L lifetime, pet level 5/15/30, 1 and 5 friends), with progress bars. Computed on the device; nothing stored.
+- **Reminders.** Local notifications every 1-4 hours within a chosen time window, titled with the pet's name. Today's remaining reminders are dropped once the goal is reached. Cleared on logout.
+- **Rules tests.** `npm run test:rules` runs the real `databaseService` against the Firestore emulator: 35 tests over profiles, pets, migration, drinks, friends, history and both leaderboards.
 
 ## Current state (all passing)
 
@@ -20,32 +26,25 @@ Run these from `HydroHomies/`:
 
 | Check | Result |
 | --- | --- |
-| `npm run compile` | 0 errors (was 53) |
-| `npx tsc -p functions` | 0 errors |
+| `npm run compile` | 0 errors |
 | `npm run lint:check` | clean |
-| `npm test` | 7 suites, 32 tests pass (was 2 suites failing) |
-| `npm run test:rules` | 24 Firestore rules tests pass in the emulator (needs Java 21+) |
-| `npm run model:verify` | loads, outputs 3 probabilities |
+| `npm test` | 7 suites, 32 tests pass |
+| `npm run test:rules` | 35 tests pass in the emulator |
 | `npx expo export --platform android` | bundles |
 
-## Next steps, in order
+`npm run test:rules` needs **Java 21+**. The system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `jdk-21.0.13+9-jre\bin` folder on `PATH` in that terminal first.
 
-1. **Rotate keys.** `HydroHomies/.env` (gitignored) has `EXPO_PUBLIC_OPENROUTER_API_KEY` and `EXPO_PUBLIC_GEMINI_API_KEY`. Hackathon builds embedded these in the app bundle, so treat them as leaked. Create a new OpenRouter key and don't put it back in `.env` as `EXPO_PUBLIC_*` except for local dev.
-2. ~~Test the Firestore rules in the emulator.~~ Done: `test/rules/firestore.rules.test.ts` runs the real `databaseService` against the emulator and covers `saveProfile`, `adoptPet`, `migrateLegacyPet`, `logHydration` (first drink of the day and later drinks), private entries and leaderboard reads. The first-drink fix works. Current firebase-tools needs **Java 21+**, and the system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `bin` on `PATH` before `npm run test:rules`.
-3. **Deploy.** The project needs the Blaze plan for Functions.
-   ```bash
-   npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project hydrohype-9fa73
-   npm run deploy:firestore
-   npm run deploy:functions
-   ```
-4. **Test on a device** with a dev build (`npm run android`). Expo Go works too, but it can't run the on-device model. Things to check: the full sign-up → pet → scan → leaderboard flow, the camera, legacy-pet migration with an old account, and whether `bundleResourceIO` loads the model on device. So far it has only been verified in Node.
-5. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
+## Next steps
 
-## Known gaps and ideas
+1. **Add the OpenRouter key.** Copy `HydroHomies/.env.example` to `HydroHomies/.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. Set a monthly spending limit on the key in OpenRouter, because it's in the app bundle and there's no per-user rate limit without the Cloud Function.
+2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. The new rules (friends, friend codes) and the new `(userId, dateKey)` history index are needed by this version. The Stats screen fails until the index finishes building.
+3. **Rebuild the dev build and test on a device** (`npm run android`). `expo-notifications` is a new native module. Check: sign-up → pet → scan → leaderboard, adding a friend from a second account, the Stats screen, a reminder arriving, the camera, legacy-pet migration, and whether `bundleResourceIO` loads the model on device.
+4. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
 
-- There's no friends list, so the leaderboard shows everyone who logged water today. Friends would be a `friends` subcollection plus a `where("userId", "in", ...)` query.
-- Day boundaries use the device's local date (`utils/dateKey.ts`). Users in different time zones roll over at different times.
-- The on-device model has no "empty" class, so it's only used for the *before* photo. Retraining with empty and low-level images would let it handle both photos (see `ml_training/`).
+## Known gaps
+
+- Day boundaries use the device's local date (`utils/dateKey.ts`), so "today" matches each user's own calendar. Users in different time zones can appear on each other's leaderboard a few hours early or late. That's on purpose; using UTC would make "today's goal" reset mid-day for most people.
+- The on-device model has no "empty" class, so it's only used for the *before* photo. Retraining needs a dataset of empty and low-level bottle photos, which isn't in the repo (see `ml_training/`).
+- Streaks count the last 60 days only. Lifetime litres are estimated from pet XP (10 XP per 100 ml), so migrated hackathon pets start with whatever XP they had.
+- Anyone who has your friend code can add you. There's no accept step and no way to change your code yet.
 - Hackathon-era `hydrationEntries` have no `dateKey`, so they don't appear in "Today's Drinks". That's harmless.
-- Health decay is computed on read (`currentHealth`), so leaderboard avatars don't show friends' current health.
-- Not built: reminders, weekly stats, achievements.

@@ -12,6 +12,7 @@ import {
   type DailySummary,
   type HydrationEntry,
 } from "@/services/firebase/database"
+import { syncReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
@@ -30,12 +31,20 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const { profile, pet } = useSignedInUser()
 
   const [summary, setSummary] = useState<DailySummary | null>(null)
+  const [summaryLoaded, setSummaryLoaded] = useState(false)
   const [entries, setEntries] = useState<HydrationEntry[]>([])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     const onError = (e: Error) => setLoadError(e.message)
-    const unsubSummary = databaseService.subscribeToDailySummary(profile.uid, setSummary, onError)
+    const unsubSummary = databaseService.subscribeToDailySummary(
+      profile.uid,
+      (s) => {
+        setSummary(s)
+        setSummaryLoaded(true)
+      },
+      onError,
+    )
     const unsubEntries = databaseService.subscribeToTodayEntries(profile.uid, setEntries, onError)
     return () => {
       unsubSummary()
@@ -45,6 +54,15 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
 
   const dailyGoal = profile.stats?.dailyWaterGoal ?? 2500
   const todayIntake = summary?.totalMl ?? 0
+  const goalReached = todayIntake >= dailyGoal
+
+  // Refresh scheduled reminders on open, and drop today's once the goal is reached
+  useEffect(() => {
+    if (!summaryLoaded) return
+    syncReminders(pet?.name ?? "", goalReached).catch((e) =>
+      console.warn("Couldn't schedule reminders:", e?.message),
+    )
+  }, [summaryLoaded, goalReached, pet?.name])
   const progress = calculateProgress(todayIntake, dailyGoal)
   const remaining = Math.max(0, dailyGoal - todayIntake)
   const { palette } = theme.colors
@@ -106,6 +124,11 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           onPress={() => navigation.navigate("ScanBottle")}
         />
         <Button text="🏆 Leaderboard" onPress={() => navigation.navigate("Leaderboard")} />
+        <View style={themed($actionRow)}>
+          <Button text="📊 Stats" style={$flex} onPress={() => navigation.navigate("Stats")} />
+          <Button text="👥 Friends" style={$flex} onPress={() => navigation.navigate("Friends")} />
+        </View>
+        <Button text="⏰ Reminders" onPress={() => navigation.navigate("Reminders")} />
       </View>
 
       {!!loadError && (
@@ -192,6 +215,11 @@ const $dimCentered: ThemedStyle<TextStyle> = ({ colors }) => ({
 })
 
 const $actions: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.md })
+
+const $actionRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  gap: spacing.md,
+})
 
 const $error: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.error })
 
