@@ -1,5 +1,16 @@
-node_modules
-.env
+# Dependencies and caches (each package has its own; the root one is a stray install)
+node_modules/
+.expo/
 .idea
-.expo/*
+.env
 android
+ios
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# graphify knowledge-graph output
+graphify-out/

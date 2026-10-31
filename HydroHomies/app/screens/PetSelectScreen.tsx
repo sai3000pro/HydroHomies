@@ -1,101 +1,40 @@
 import { FC, useState } from "react"
-// eslint-disable-next-line no-restricted-imports
-import { ViewStyle, Image, Text, View, ImageStyle, Pressable, Alert, TextStyle } from "react-native"
-import { doc, setDoc } from "firebase/firestore"
+import { Image, ImageStyle, Pressable, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Container } from "@/components/Container"
+import { PET_IMAGES } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
+import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
-import { useAuth } from "@/context/AuthContext"
+import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { authService } from "@/services/firebase/auth"
-import { db } from "@/services/firebase/config"
+import { databaseService } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { PET_SPECIES, SPECIES_DISPLAY_NAMES, type PetSpecies } from "@/utils/petEvolution"
 
 interface PetSelectScreenProps extends AppStackScreenProps<"PetSelect"> {}
 
-const defaultPets = [
-  {
-    image: require("../../assets/images/basic-pet-1.png"),
-    value: "elephant",
-    display: "Hydrophant",
-  },
-  {
-    image: require("../../assets/images/basic-pet-2.png"),
-    value: "alien",
-    display: "Agualien",
-  },
-  {
-    image: require("../../assets/images/basic-pet-3.png"),
-    value: "sphele",
-    display: "Sphele",
-  },
-]
+export const PetSelectScreen: FC<PetSelectScreenProps> = () => {
+  const { themed, theme } = useAppTheme()
+  const { user, profile } = useSignedInUser()
 
-export const PetSelectScreen: FC<PetSelectScreenProps> = ({ navigation }) => {
-  const { themed } = useAppTheme()
-  const { setPet, setUserProfile, userProfile } = useAuth()
-
-  const [isLoading, setIsLoading] = useState(false)
+  const [species, setSpecies] = useState<PetSpecies | null>(null)
   const [name, setName] = useState("")
-  const [selectedPet, setSelectedPet] = useState("")
-  const [selectedPetDisplay, setSelectedPetDisplay] = useState("")
+  const [errorText, setErrorText] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
   async function adopt() {
-    // 1. Validation
-    if (!selectedPet) {
-      Alert.alert("Missing Companion", "Please select a pet to adopt!")
-      return
-    }
-
-    if (!name.trim()) {
-      Alert.alert("Missing Name", "Please give your new friend a name!")
-      return
-    }
-
+    if (!species) return setErrorText("Pick a companion first.")
+    if (!name.trim()) return setErrorText("Give your new friend a name.")
+    setErrorText("")
     setIsLoading(true)
-
     try {
-      // 2. Get the current logged-in user
-      const user = authService.getCurrentUser()
-
-      if (!user) {
-        throw new Error("No user logged in.")
-      }
-
-      // 3. Save Pet Data to Firestore
-      const pet = {
-        type: selectedPet,
-        name: name.trim(),
-        level: 1,
-        currentXp: 0,
-        maxXp: 100,
-        health: 100,
-        userId: user.uid,
-        lastFed: null,
-        adoptedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      await setDoc(doc(db, "users", user.uid), { pet: pet }, { merge: true })
-
-      console.log("Pet adopted successfully!")
-
-      setPet(pet)
-      setUserProfile({
-        ...userProfile,
-        pet: pet,
-      })
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Home" }],
-      })
-    } catch (error: any) {
-      console.error("Adoption error:", error)
-      Alert.alert("Error", "Could not complete adoption. Please try again.")
-    } finally {
+      // The navigator switches to Home once the pet snapshot arrives
+      await databaseService.adoptPet(user.uid, profile.username, species, name.trim())
+    } catch (e: any) {
+      setErrorText(e?.message ?? "Could not complete adoption. Try again.")
       setIsLoading(false)
     }
   }
@@ -107,114 +46,97 @@ export const PetSelectScreen: FC<PetSelectScreenProps> = ({ navigation }) => {
       safeAreaEdges={["top", "bottom"]}
     >
       <Container>
-        <View style={themed($bigContainer)}>
-          <Text style={themed($header)}>Choose Your Partner!</Text>
+        <View style={themed($content)}>
+          <Text preset="heading" text="Choose Your Partner!" style={themed($centered)} />
 
-          <View style={themed($petsContainer)}>
-            {defaultPets.map((pet) => {
-              return (
-                <Pressable
-                  key={`${pet.value}`}
-                  onPress={() => {
-                    setSelectedPet(pet.value)
-                    setSelectedPetDisplay(pet.display)
-                  }}
-                >
-                  <Image style={themed($petImage)} source={pet.image} />
-                </Pressable>
-              )
-            })}
+          <View style={themed($petsRow)}>
+            {PET_SPECIES.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => setSpecies(s)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: species === s }}
+                accessibilityLabel={SPECIES_DISPLAY_NAMES[s]}
+                style={[
+                  themed($petOption),
+                  species === s && { borderColor: theme.colors.palette.water700 },
+                ]}
+              >
+                <Image style={$petImage} source={PET_IMAGES[s]} />
+                <Text size="xs" text={SPECIES_DISPLAY_NAMES[s]} style={themed($centered)} />
+              </Pressable>
+            ))}
           </View>
 
-          {selectedPet && (
+          {species && (
             <>
-              <Text style={themed($selectionText)}>
-                You selected:{"\n"}
-                {selectedPetDisplay}!
-              </Text>
-
+              <Text
+                preset="subheading"
+                text={`You picked ${SPECIES_DISPLAY_NAMES[species]}!`}
+                style={themed($centered)}
+              />
               <TextField
                 value={name}
                 onChangeText={setName}
                 containerStyle={themed($textField)}
-                autoCapitalize="none"
                 autoCorrect={false}
+                maxLength={20}
                 label="Name"
                 placeholder="Give them a name"
-                placeholderTextColor="#000000"
               />
-
               <Button
                 testID="adopt-button"
                 text="Adopt"
-                style={themed($tapButton)}
+                style={themed($button)}
                 preset="reversed"
-                onPress={() => {
-                  console.log("Button onPress handler called!")
-                  adopt().catch((error) => {
-                    console.error("Adopt function error:", error)
-                    Alert.alert("Unexpected Error", `Adopt failed: ${error.message || error}`)
-                  })
-                }}
+                onPress={adopt}
                 disabled={isLoading}
               />
             </>
           )}
+          {!!errorText && <Text text={errorText} style={themed($error)} />}
         </View>
       </Container>
     </Screen>
   )
 }
 
-const $screenContentContainer: ThemedStyle<ViewStyle> = () => ({
-  height: "100%",
-  display: "flex",
+const $screenContentContainer: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  flexGrow: 1,
   alignItems: "center",
   justifyContent: "center",
-  backgroundColor: "#89DDF9",
+  backgroundColor: colors.palette.water300,
 })
 
-const $bigContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  height: 525,
-  display: "flex",
+const $content: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   alignItems: "center",
-  flexDirection: "column",
+  gap: spacing.md,
+  paddingVertical: spacing.lg,
 })
 
-const $header: ThemedStyle<TextStyle> = ({ typography }) => ({
-  fontSize: 30,
-  alignSelf: "center",
-  textAlign: "center",
-  fontFamily: typography.fonts.spaceGrotesk.medium,
-})
+const $centered: ThemedStyle<TextStyle> = () => ({ textAlign: "center" })
 
-const $petsContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  display: "flex",
+const $petsRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
-  alignItems: "flex-start",
   justifyContent: "space-between",
+  gap: spacing.xs,
 })
 
-const $petImage: ThemedStyle<ImageStyle> = () => ({
-  width: 100,
-  resizeMode: "contain",
+const $petOption: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  alignItems: "center",
+  padding: spacing.xs,
+  borderRadius: 16,
+  borderWidth: 3,
+  borderColor: "transparent",
 })
 
-const $selectionText: ThemedStyle<TextStyle> = ({ typography }) => ({
-  alignSelf: "center",
+const $petImage: ImageStyle = { width: 90, height: 90, resizeMode: "contain" }
+
+const $textField: ThemedStyle<ViewStyle> = () => ({ width: "100%" })
+
+const $button: ThemedStyle<ViewStyle> = () => ({ minWidth: 120, borderRadius: 33 })
+
+const $error: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.error,
   textAlign: "center",
-  fontSize: 24,
-  fontFamily: typography.fonts.spaceGrotesk.normal,
-})
-
-const $textField: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  width: "100%",
-  marginTop: spacing.sm,
-})
-
-const $tapButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  width: 100,
-  marginTop: spacing.xl,
-  borderRadius: 33,
-  backgroundColor: "#D9D9D9",
 })

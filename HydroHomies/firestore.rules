@@ -1,23 +1,73 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read/write their own profile, and read others' for leaderboard
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isMl(v) { return v is int && v >= 0 && v <= 3000; }
+
+    // Private profile: email and body stats. Only the owner can see it.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.get('username', '') is string
+        && request.resource.data.get('username', '').size() <= 24;
+      allow delete: if false;
     }
 
-    // Users can create hydration entries, read their own
+    // Pets are public to signed-in users (leaderboard, friend view).
+    match /pets/{uid} {
+      allow read: if signedIn();
+      allow create: if isOwner(uid)
+        && request.resource.data.userId == uid
+        && request.resource.data.species in ['elephant', 'alien', 'sphele']
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.experience is int
+        // New pets start at 0; pets migrated from the hackathon build keep their small XP
+        && request.resource.data.experience >= 0
+        && request.resource.data.experience <= 1000;
+      // XP can only grow, and by at most what one maximum-size drink earns (3000 ml -> 300 XP)
+      allow update: if isOwner(uid)
+        && request.resource.data.userId == uid
+        && request.resource.data.species == resource.data.species
+        && request.resource.data.experience is int
+        && request.resource.data.experience >= resource.data.experience
+        && request.resource.data.experience <= resource.data.experience + 300
+        && request.resource.data.health >= 0
+        && request.resource.data.health <= 100;
+      allow delete: if false;
+    }
+
+    // Individual drinks: private to the owner.
     match /hydrationEntries/{entryId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || request.query.limit <= 10);
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && isMl(request.resource.data.amount)
+        && request.resource.data.amount > 0
+        && request.resource.data.dateKey is string;
+      allow update, delete: if false;
     }
 
-    // Users can read/write their own pet, read others' for friend pet view
-    match /pets/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // One doc per user per day, id "{uid}_{YYYY-MM-DD}". Public: it drives the leaderboard.
+    match /dailySummaries/{summaryId} {
+      // On create `resource` is null, so the previous total is 0
+      function prevTotal() { return resource == null ? 0 : resource.data.totalMl; }
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && summaryId == request.auth.uid + '_' + request.resource.data.dateKey
+        && request.resource.data.totalMl is int
+        // Each write adds one drink of at most 3000 ml
+        && request.resource.data.totalMl >= prevTotal()
+        && request.resource.data.totalMl <= prevTotal() + 3000;
+      allow delete: if false;
+    }
+
+    // aiUsage/{uid}_{day}: written only by the estimateBottle function (Admin SDK).
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

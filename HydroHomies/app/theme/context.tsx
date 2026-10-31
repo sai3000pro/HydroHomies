@@ -57,7 +57,7 @@ export const ThemeProvider: FC<PropsWithChildren<ThemeProviderProps>> = ({
 }) => {
   // The operating system theme:
   const systemColorScheme = useColorScheme()
-  
+
   // Our saved theme context: can be "light", "dark", or undefined (system theme)
   // Use storage utility instead of useMMKVString for Expo Go compatibility
   const [themeScheme, setThemeSchemeState] = useState<ThemeContextModeT | undefined>(() => {

@@ -1,7 +1,6 @@
 import { ComponentType, FC, useMemo, useRef, useState } from "react"
 // eslint-disable-next-line no-restricted-imports
-import { TextInput, TextStyle, ViewStyle, Alert, View } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { Alert, TextInput, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Container } from "@/components/Container"
@@ -9,127 +8,53 @@ import { PressableIcon } from "@/components/Icon"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField, type TextFieldAccessoryProps } from "@/components/TextField"
-import { useAuth } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { authService } from "@/services/firebase/auth"
+import { authService, describeAuthError } from "@/services/firebase/auth"
 import { isFirebaseConfigured } from "@/services/firebase/config"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 interface LoginScreenProps extends AppStackScreenProps<"Login"> {}
 
-export const LoginScreen: FC<LoginScreenProps> = () => {
-  const navigation = useNavigation()
+export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
+  const { themed } = useAppTheme()
+  const passwordInput = useRef<TextInput>(null)
 
-  const authPasswordInput = useRef<TextInput>(null)
-
-  const [authPassword, setAuthPassword] = useState("")
-  const [isAuthPasswordHidden, setIsAuthPasswordHidden] = useState(true)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [isPasswordHidden, setIsPasswordHidden] = useState(true)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [errorText, setErrorText] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { authEmail, setAuthEmail, validationError } = useAuth()
 
-  const {
-    themed,
-    theme: { colors },
-  } = useAppTheme()
-
-  const error = isSubmitted ? validationError : ""
+  const emailError =
+    isSubmitted && !EMAIL_RE.test(email.trim()) ? "Enter a valid email address" : ""
 
   async function login() {
     setIsSubmitted(true)
     setErrorText("")
-
-    if (validationError) {
-      console.log("Validation error - blocking login:", validationError)
-      Alert.alert("Validation Error", validationError)
-      setIsSubmitted(false)
-      return
-    }
-
-    // Check Firebase configuration first
-    console.log("Firebase configured?", isFirebaseConfigured)
     if (!isFirebaseConfigured) {
-      console.warn("Firebase not configured!")
-      Alert.alert(
-        "Firebase Not Configured",
-        "Please configure Firebase before using the app.\n\n" +
-          "1. Go to Firebase Console: https://console.firebase.google.com/\n" +
-          "2. Create/select a project\n" +
-          "3. Enable Authentication (Email/Password)\n" +
-          "4. Create Firestore Database\n" +
-          "5. Copy your config to: app/services/firebase/config.ts\n\n" +
-          "See SETUP.md for detailed instructions.",
-      )
-      setIsSubmitted(false)
-      setIsLoading(false)
+      setErrorText("Firebase is not configured. See SETUP.md.")
+      return
+    }
+    if (!EMAIL_RE.test(email.trim())) return
+    if (password.length < 6) {
+      setErrorText("Password must be at least 6 characters.")
       return
     }
 
-    if (!authEmail || authEmail.trim() === "") {
-      Alert.alert("Error", "Please enter an email address")
-      setIsSubmitted(false)
-      return
-    }
-
-    if (!authPassword || authPassword.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters")
-      setIsSubmitted(false)
-      return
-    }
-
-    console.log("Starting login process...")
     setIsLoading(true)
-
     try {
-      // Try to sign in with Firebase
-      await authService.signIn(authEmail, authPassword)
-      console.log("Login successful!")
-    } catch (error: any) {
-      console.error("Login error:", error)
-      let errorMessage = "Failed to sign in. Please try again."
-
-      // Check if Firebase is configured
-      if (error.code === "auth/invalid-api-key" || error.message?.includes("API key")) {
-        errorMessage =
-          "Firebase is not configured. Please check your Firebase config in app/services/firebase/config.ts"
-        console.error(
-          "Firebase Configuration Error: Please set your Firebase credentials in app/services/firebase/config.ts",
-        )
-        if (typeof window !== "undefined") {
-          alert(errorMessage)
-        } else {
-          Alert.alert("Configuration Error", errorMessage)
-        }
-        setIsLoading(false)
-        setIsSubmitted(false)
-        return
-      }
-
-      // Handle different Firebase auth error codes
-      if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") {
-        errorMessage = "User not found or invalid credentials."
-      } else if (error.code === "auth/wrong-password") {
-        errorMessage = "Incorrect password. Please try again or reset your password."
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "Invalid email address. Please check and try again."
-      } else if (error.code === "auth/network-request-failed") {
-        errorMessage = "Network error. Please check your internet connection and try again."
-      } else if (error.code === "auth/too-many-requests") {
-        errorMessage = "Too many failed login attempts. Please try again later."
-      } else {
-        errorMessage = `Error: ${error.message || error.code || "Unknown error occurred"}`
-        console.error("Unhandled Firebase error:", error)
-      }
-
-      if (errorMessage) {
-        Alert.alert("Error", errorMessage)
-      }
-      setErrorText(errorMessage)
+      // On success, AuthContext picks up the session and the navigator switches stacks
+      await authService.signIn(email.trim(), password)
+    } catch (e: any) {
+      const message = describeAuthError(e)
+      setErrorText(message)
+      Alert.alert("Login failed", message)
     } finally {
       setIsLoading(false)
-      setIsSubmitted(false)
     }
   }
 
@@ -138,15 +63,15 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
       function PasswordRightAccessory(props: TextFieldAccessoryProps) {
         return (
           <PressableIcon
-            icon={isAuthPasswordHidden ? "view" : "hidden"}
+            icon={isPasswordHidden ? "view" : "hidden"}
             color="#000000"
             containerStyle={props.style}
             size={20}
-            onPress={() => setIsAuthPasswordHidden(!isAuthPasswordHidden)}
+            onPress={() => setIsPasswordHidden(!isPasswordHidden)}
           />
         )
       },
-    [isAuthPasswordHidden, colors.palette.neutral800],
+    [isPasswordHidden],
   )
 
   return (
@@ -159,8 +84,8 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
         <View style={themed($mainContainer)}>
           <View style={themed($formContainer)}>
             <TextField
-              value={authEmail}
-              onChangeText={setAuthEmail}
+              value={email}
+              onChangeText={setEmail}
               containerStyle={themed($textField)}
               autoCapitalize="none"
               autoComplete="email"
@@ -168,24 +93,22 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
               keyboardType="email-address"
               labelTx="loginScreen:emailFieldLabel"
               placeholderTx="loginScreen:emailFieldPlaceholder"
-              placeholderTextColor="#000000"
-              helper={error}
-              status={error ? "error" : undefined}
-              onSubmitEditing={() => authPasswordInput.current?.focus()}
+              helper={emailError}
+              status={emailError ? "error" : undefined}
+              onSubmitEditing={() => passwordInput.current?.focus()}
             />
 
             <TextField
-              ref={authPasswordInput}
-              value={authPassword}
-              onChangeText={setAuthPassword}
+              ref={passwordInput}
+              value={password}
+              onChangeText={setPassword}
               containerStyle={themed($textField)}
               autoCapitalize="none"
               autoComplete="password"
               autoCorrect={false}
-              secureTextEntry={isAuthPasswordHidden}
+              secureTextEntry={isPasswordHidden}
               labelTx="loginScreen:passwordFieldLabel"
               placeholderTx="loginScreen:passwordFieldPlaceholder"
-              placeholderTextColor="#000000"
               onSubmitEditing={login}
               RightAccessory={PasswordRightAccessory}
             />
@@ -195,24 +118,20 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
               tx="loginScreen:tapToLogIn"
               style={themed($tapButton)}
               preset="reversed"
-              onPress={() => {
-                console.log("Button onPress handler called!")
-                login().catch((error) => {
-                  console.error("Login function error:", error)
-                  Alert.alert("Unexpected Error", `Login failed: ${error.message || error}`)
-                })
-              }}
+              onPress={login}
               disabled={isLoading}
             />
 
-            {errorText && <Text style={themed($error)}>{errorText}</Text>}
+            {!!errorText && <Text style={themed($error)} text={errorText} />}
           </View>
 
           <Text style={themed($text)}>
             No account?{" "}
-            <Text style={themed($signup)} onPress={() => navigation.navigate("SignUp")}>
-              Sign-up
-            </Text>
+            <Text
+              style={themed($link)}
+              onPress={() => navigation.navigate("SignUp")}
+              text="Sign up"
+            />
           </Text>
         </View>
       </Container>
@@ -220,54 +139,41 @@ export const LoginScreen: FC<LoginScreenProps> = () => {
   )
 }
 
-const $screenContentContainer: ThemedStyle<ViewStyle> = () => ({
+const $screenContentContainer: ThemedStyle<ViewStyle> = ({ colors }) => ({
   width: "100%",
   height: "100%",
-  display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  backgroundColor: "#89DDF9",
+  backgroundColor: colors.palette.water300,
 })
 
-const $mainContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $mainContainer: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   width: "100%",
-  height: 400,
   padding: spacing.lg,
   borderRadius: 33,
-  backgroundColor: "#C2F5FF",
-  display: "flex",
-  flexDirection: "column",
+  backgroundColor: colors.palette.water100,
   alignItems: "center",
-  justifyContent: "space-between",
+  gap: spacing.xl,
 })
 
-const $formContainer: ThemedStyle<ViewStyle> = () => ({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-})
+const $formContainer: ThemedStyle<ViewStyle> = () => ({ width: "100%", alignItems: "center" })
 
 const $textField: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   width: "100%",
   marginBottom: spacing.lg,
 })
 
-const $tapButton: ThemedStyle<ViewStyle> = () => ({
-  width: 100,
-  borderRadius: 33,
-  backgroundColor: "#D9D9D9",
-})
+const $tapButton: ThemedStyle<ViewStyle> = () => ({ minWidth: 120, borderRadius: 33 })
 
 const $error: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
   marginTop: spacing.md,
   color: colors.error,
+  textAlign: "center",
 })
 
-const $text: ThemedStyle<TextStyle> = () => ({
-  color: "#000000",
-})
+const $text: ThemedStyle<TextStyle> = () => ({ color: "#000000" })
 
-const $signup: ThemedStyle<TextStyle> = () => ({
-  color: "blue",
+const $link: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.water700,
   fontWeight: "bold",
 })

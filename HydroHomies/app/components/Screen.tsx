@@ -12,6 +12,10 @@ import {
 } from "react-native"
 import { useScrollToTop } from "@react-navigation/native"
 import { SystemBars, SystemBarsProps, SystemBarStyle } from "react-native-edge-to-edge"
+
+import { useAppTheme } from "@/theme/context"
+import { $styles } from "@/theme/styles"
+import { ExtendedEdge, useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 // Conditionally import KeyboardAwareScrollView - may not work in Expo Go due to worklets version mismatch
 // Use require to catch errors at runtime
 let KeyboardAwareScrollViewComponent: React.ComponentType<any> | null = null
@@ -23,13 +27,12 @@ try {
   }
 } catch (error) {
   // KeyboardAwareScrollView not available - use ScrollView as fallback
-  console.warn("KeyboardAwareScrollView not available, using ScrollView fallback for Expo Go compatibility:", error)
+  console.warn(
+    "KeyboardAwareScrollView not available, using ScrollView fallback for Expo Go compatibility:",
+    error,
+  )
   KeyboardAwareScrollViewComponent = null
 }
-
-import { useAppTheme } from "@/theme/context"
-import { $styles } from "@/theme/styles"
-import { ExtendedEdge, useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 
 export const DEFAULT_BOTTOM_OFFSET = 50
 
@@ -220,7 +223,7 @@ function ScreenWithScrolling(props: ScreenProps) {
 
   // Use KeyboardAwareScrollView if available, otherwise use regular ScrollView
   const ScrollComponent = KeyboardAwareScrollViewComponent || ScrollView
-  
+
   return (
     <ScrollComponent
       {...(KeyboardAwareScrollViewComponent ? { bottomOffset: keyboardBottomOffset } : {})}

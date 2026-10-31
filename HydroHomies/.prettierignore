@@ -7,3 +7,6 @@ ignite/ignite.json
 package.json
 .eslintignore
 *.ejs
+
+functions/lib
+graphify-out

@@ -1,10 +1,8 @@
 /**
- * TensorFlow.js React Native imports - Native platforms only
- * This file is only loaded on iOS and Android, not on web
+ * iOS/Android: TF.js React Native platform adapter. Importing the package
+ * registers the platform; bundleResourceIO loads bundled models and
+ * decodeJpeg turns JPEG bytes into tensors.
  */
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 import "@tensorflow/tfjs-react-native"
-import { bundleResourceIO, decodeJpeg } from "@tensorflow/tfjs-react-native"
 
-export { bundleResourceIO, decodeJpeg }
+export { bundleResourceIO, decodeJpeg } from "@tensorflow/tfjs-react-native"

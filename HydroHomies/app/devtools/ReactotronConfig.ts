@@ -3,7 +3,8 @@
  * free desktop app for inspecting and debugging your React Native app.
  * @see https://github.com/infinitered/reactotron
  */
-import { Platform, NativeModules } from "react-native"
+import { NativeModules, Platform } from "react-native"
+import { MMKV } from "react-native-mmkv"
 import { ArgType } from "reactotron-core-client"
 import { ReactotronReactNative } from "reactotron-react-native"
 import mmkvPlugin from "reactotron-react-native-mmkv"
@@ -21,7 +22,10 @@ const reactotron = Reactotron.configure({
   },
 })
 
-reactotron.use(mmkvPlugin<ReactotronReactNative>({ storage }))
+// Only attach the MMKV inspector when MMKV is in use (not the Expo Go fallback)
+if (storage instanceof MMKV) {
+  reactotron.use(mmkvPlugin<ReactotronReactNative>({ storage }))
+}
 
 if (Platform.OS !== "web") {
   reactotron.useReactNative({

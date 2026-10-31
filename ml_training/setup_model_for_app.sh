@@ -1,60 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Copies the trained TF.js model into the app, rewrites it for tfjs 4.x, and
+# checks that it loads. Run from anywhere after train_water_level_model.py.
+set -euo pipefail
 
-# Script to copy trained TensorFlow.js model files to React Native app assets
-# Run this after training the model
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SRC="$HERE/models/tensorflowjs_model"
+APP="$HERE/../HydroHomies"
+DEST="$APP/assets/models/water-level-classifier"
 
-set -e
+for f in model.json group1-shard1of1.bin class_labels.json model_metadata.json; do
+  [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f. Train the model first." >&2; exit 1; }
+done
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+mkdir -p "$DEST"
+cp "$SRC"/model.json "$SRC"/group1-shard1of1.bin "$SRC"/class_labels.json "$SRC"/model_metadata.json "$DEST/"
 
-echo "📦 Setting up ML model for React Native app..."
+# Keras 3 exports need rewriting before @tensorflow/tfjs can load them
+node "$APP/scripts/patch-keras3-model.js" "$DEST/model.json"
+(cd "$APP" && node scripts/verify-model.js)
 
-# Check if model files exist
-MODEL_DIR="models/tensorflowjs_model"
-if [ ! -d "$MODEL_DIR" ]; then
-    echo -e "${RED}❌ Error: Model files not found in $MODEL_DIR${NC}"
-    echo "Please run 'python train_water_level_model.py' first to train the model."
-    exit 1
-fi
-
-# Check if model.json exists
-if [ ! -f "$MODEL_DIR/model.json" ]; then
-    echo -e "${RED}❌ Error: model.json not found in $MODEL_DIR${NC}"
-    exit 1
-fi
-
-# Create assets directory if it doesn't exist
-ASSETS_DIR="../HydroHomies/assets/models/water-level-classifier"
-mkdir -p "$ASSETS_DIR"
-
-# Copy model files
-echo "📂 Copying model files to $ASSETS_DIR..."
-cp -r "$MODEL_DIR"/* "$ASSETS_DIR/"
-
-# Verify files were copied
-if [ -f "$ASSETS_DIR/model.json" ]; then
-    echo -e "${GREEN}✅ Model files copied successfully!${NC}"
-    
-    # List copied files
-    echo ""
-    echo "📋 Copied files:"
-    ls -lh "$ASSETS_DIR" | grep -v "^total"
-    
-    echo ""
-    echo -e "${YELLOW}💡 Next steps:${NC}"
-    echo "1. Install React Native dependencies:"
-    echo "   cd ../HydroHomies/HydroHomies && npm install @tensorflow/tfjs @tensorflow/tfjs-react-native @tensorflow/tfjs-platform-react-native expo-asset"
-    echo ""
-    echo "2. Restart your Expo development server"
-    echo ""
-    echo "3. The model will be loaded automatically when the app starts"
-    echo ""
-    echo -e "${GREEN}✅ Setup complete!${NC}"
-else
-    echo -e "${RED}❌ Error: Files were not copied successfully${NC}"
-    exit 1
-fi
+echo "Model installed in $DEST"

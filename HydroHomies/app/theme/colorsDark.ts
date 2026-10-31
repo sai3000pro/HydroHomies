@@ -31,6 +31,19 @@ const palette = {
   angry100: "#F2D6CD",
   angry500: "#C03403",
 
+  success100: "#D7F5E3",
+  success500: "#2E9E5B",
+
+  warning100: "#FFF4D6",
+  warning500: "#E0A100",
+  warning900: "#6B4A00",
+
+  // HydroHype brand blues
+  water100: "#C2F5FF",
+  water300: "#89DDF9",
+  water500: "#2F8FD8",
+  water700: "#00439C",
+
   overlay20: "rgba(25, 16, 21, 0.2)",
   overlay50: "rgba(25, 16, 21, 0.5)",
 } as const

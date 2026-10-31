@@ -1,195 +1,97 @@
 import { FC, useEffect, useState } from "react"
-import {
-  View,
-  ViewStyle,
-  TextStyle,
-  ScrollView,
-  RefreshControl,
-  ActivityIndicator,
-} from "react-native"
-import { Text } from "@/components/Text"
-import { Screen } from "@/components/Screen"
+import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
+
+import { Button } from "@/components/Button"
 import { Pet } from "@/components/Pet"
+import { Screen } from "@/components/Screen"
+import { Text } from "@/components/Text"
+import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import { databaseService, type DailySummary, type PetState } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { databaseService, type PetState, type UserProfile } from "@/services/firebase/database"
+import { calculateProgress } from "@/utils/waterGoalCalculator"
 
 interface FriendPetScreenProps extends AppStackScreenProps<"FriendPet"> {}
 
+/** Another user's pet and today's progress. Only public data (pets, dailySummaries) is read. */
 export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route }) => {
   const { themed, theme } = useAppTheme()
   const { userId, displayName } = route.params
 
-  const [pet, setPet] = useState<PetState | null>(null)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [pet, setPet] = useState<PetState | null | undefined>(undefined)
+  const [summary, setSummary] = useState<DailySummary | null>(null)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    loadFriendData()
+    const onError = (e: Error) => setError(e.message)
+    const unsubPet = databaseService.subscribeToPet(userId, setPet, onError)
+    const unsubSummary = databaseService.subscribeToDailySummary(userId, setSummary, onError)
+    return () => {
+      unsubPet()
+      unsubSummary()
+    }
   }, [userId])
 
-  const loadFriendData = async () => {
-    setIsLoading(true)
-    try {
-      const [petData, profileData] = await Promise.all([
-        databaseService.getFriendPet(userId),
-        databaseService.getUserProfile(userId),
-      ])
-
-      setPet(petData)
-      setUserProfile(profileData)
-    } catch (error) {
-      console.error("Error loading friend data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    await loadFriendData()
-    setIsRefreshing(false)
-  }
-
-  if (isLoading) {
-    return (
-      <Screen preset="fixed" contentContainerStyle={themed($screenContentContainer)}>
-        <View style={themed($loadingContainer)}>
-          <ActivityIndicator size="large" color={theme.colors.palette.accent500} />
-          <Text text="Loading..." style={themed($loadingText)} />
-        </View>
-      </Screen>
-    )
-  }
+  const progress = summary ? calculateProgress(summary.totalMl, summary.goalMl) : 0
 
   return (
     <Screen
       preset="scroll"
-      contentContainerStyle={themed($screenContentContainer)}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          tintColor={theme.colors.palette.accent500}
-        />
-      }
+      contentContainerStyle={themed($container)}
+      safeAreaEdges={["top", "bottom"]}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={themed($header)}>
-          <Text preset="heading" text={`${displayName}'s Pet`} />
-          {userProfile?.stats && (
-            <Text
-              size="md"
-              text={`Daily Goal: ${((userProfile.stats.dailyWaterGoal || 2500) / 1000).toFixed(1)}L`}
-              style={themed($subtitle)}
-            />
-          )}
+      <View style={themed($header)}>
+        <Text preset="heading" text={`${displayName}'s pet`} style={$flex} />
+        <Button text="Back" onPress={() => navigation.goBack()} />
+      </View>
+
+      {!!error && <Text style={{ color: theme.colors.error }} text={error} />}
+
+      {pet === undefined && !error ? (
+        <ActivityIndicator size="large" color={theme.colors.tint} />
+      ) : pet ? (
+        <View style={themed($card)}>
+          <Pet pet={pet} size="large" />
         </View>
+      ) : (
+        <Text text={`${displayName} hasn't adopted a pet yet.`} />
+      )}
 
-        {pet ? (
+      <View style={themed($card)}>
+        <Text preset="subheading" text="Today" />
+        {summary ? (
           <>
-            <View style={themed($petSection)}>
-              <Pet pet={pet} size="large" />
-            </View>
-
-            <View style={themed($statsSection)}>
-              <Text preset="subheading" text="Pet Stats" style={themed($sectionTitle)} />
-
-              <View style={themed($statRow)}>
-                <Text preset="bold" text="Level:" />
-                <Text text={`${pet.level}`} style={themed($statValue)} />
-              </View>
-
-              <View style={themed($statRow)}>
-                <Text preset="bold" text="Health:" />
-                <Text text={`${pet.health}%`} style={themed($statValue)} />
-              </View>
-
-              <View style={themed($statRow)}>
-                <Text preset="bold" text="Experience:" />
-                <Text text={`${pet.experience} XP`} style={themed($statValue)} />
-              </View>
-
-              <View style={themed($statRow)}>
-                <Text preset="bold" text="Type:" />
-                <Text text={pet.type} style={[themed($statValue), themed($typeText)]} />
-              </View>
-            </View>
+            <Text
+              text={`${(summary.totalMl / 1000).toFixed(2)} L of ${(summary.goalMl / 1000).toFixed(1)} L · ${progress}%`}
+            />
+            <Text size="sm" style={themed($dim)} text={`${summary.entryCount} drinks logged`} />
           </>
         ) : (
-          <View style={themed($emptyContainer)}>
-            <Text text="This user hasn't created a pet yet! 🌱" />
-          </View>
+          <Text style={themed($dim)} text="No drinks logged yet today." />
         )}
-      </ScrollView>
+      </View>
     </Screen>
   )
 }
 
-const $screenContentContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $flex: TextStyle = { flex: 1 }
+
+const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
-})
-
-const $loadingContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  gap: spacing.md,
-})
-
-const $loadingText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral600,
+  gap: spacing.lg,
 })
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginBottom: spacing.xl,
+  flexDirection: "row",
   alignItems: "center",
+  gap: spacing.sm,
 })
 
-const $subtitle: ThemedStyle<TextStyle> = ({ spacing, colors }) => ({
-  marginTop: spacing.sm,
-  color: colors.palette.neutral600,
-})
-
-const $petSection: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  backgroundColor: colors.palette.neutral100,
-  borderRadius: 16,
-  padding: spacing.xl,
-  marginBottom: spacing.lg,
-  alignItems: "center",
-})
-
-const $statsSection: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   backgroundColor: colors.palette.neutral100,
   borderRadius: 16,
   padding: spacing.lg,
-  marginBottom: spacing.lg,
+  gap: spacing.xs,
 })
 
-const $sectionTitle: ThemedStyle<TextStyle> = ({ spacing }) => ({
-  marginBottom: spacing.md,
-})
-
-const $statRow: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: spacing.sm,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.palette.neutral200,
-})
-
-const $statValue: ThemedStyle<TextStyle> = () => ({})
-
-const $typeText: ThemedStyle<TextStyle> = () => ({
-  textTransform: "capitalize",
-})
-
-const $emptyContainer: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  padding: spacing.xl,
-  alignItems: "center",
-  backgroundColor: colors.palette.neutral100,
-  borderRadius: 12,
-})
+const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })

@@ -122,25 +122,13 @@ The model uses:
 
 ## 🔄 Integration with React Native
 
-After training:
+After training, install the model into the app. The script copies the files, rewrites the Keras 3 export so tfjs 4.x can load it, and runs a test prediction:
 
-1. **Copy model files to React Native app**:
-   ```bash
-   # Create assets directory in your React Native app
-   mkdir -p HydroHomies/assets/models/water-level-classifier
-   
-   # Copy TensorFlow.js model files
-   cp -r ml_training/models/tensorflowjs_model/* HydroHomies/assets/models/water-level-classifier/
-   ```
+```bash
+bash ml_training/setup_model_for_app.sh
+```
 
-2. **Install TensorFlow.js in React Native**:
-   ```bash
-   cd HydroHomies/HydroHomies
-   npm install @tensorflow/tfjs @tensorflow/tfjs-react-native @tensorflow/tfjs-platform-react-native
-   npm install expo-asset
-   ```
-
-3. **Update the ML service** (see `app/services/ml/waterLevelClassifier.ts`)
+The app loads it in `HydroHomies/app/services/ml/waterLevelClassifier.ts` (dev and production builds only).
 
 ## 🐛 Troubleshooting
 

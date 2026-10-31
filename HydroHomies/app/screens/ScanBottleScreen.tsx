@@ -1,12 +1,22 @@
-import { FC, useState, useRef, useEffect } from "react"
+/**
+ * Two-photo drink logging:
+ *   1. "before": photo of the bottle -> estimated water volume
+ *   2. "after":  photo once you've drunk -> remaining volume
+ *   3. review:   logs (before - after) ml, feeds the pet, updates the leaderboard
+ *
+ * Every estimate can be corrected with the steppers. Corrected entries are
+ * logged with source "manual" so they're labelled honestly.
+ */
+import { FC, ReactNode, useEffect, useRef, useState } from "react"
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ImageStyle,
+  Pressable,
+  TextStyle,
   View,
   ViewStyle,
-  TextStyle,
-  ImageStyle,
-  Image,
-  Alert,
-  ActivityIndicator,
 } from "react-native"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import * as ImagePicker from "expo-image-picker"
@@ -14,439 +24,425 @@ import * as ImagePicker from "expo-image-picker"
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { useAuth } from "@/context/AuthContext"
+import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { authService } from "@/services/firebase/auth"
-import { databaseService } from "@/services/firebase/database"
-import { detectBottleAndLevel, getTribunalEstimate } from "@/services/ml/waterLevelClassifier"
+import { databaseService, MAX_ENTRY_ML, type EstimateSource } from "@/services/firebase/database"
+import { analyzeBottle, type BottleReading } from "@/services/vision/analyzeBottle"
+import { clamp, consumedVolume, MAX_BOTTLE_ML, type ScanPhase } from "@/services/vision/estimate"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { updatePetAfterHydration } from "@/utils/petEvolution"
+import { xpForWater } from "@/utils/petEvolution"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
 
-export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation, route }) => {
+type Step = ScanPhase | "review"
+
+interface Reading extends BottleReading {
+  imageUri: string
+  adjusted: boolean
+}
+
+const STEP_ML = 50
+
+const SOURCE_TEXT: Record<EstimateSource, string> = {
+  "ai": "AI estimate",
+  "on-device": "On-device model",
+  "manual": "Manual",
+}
+
+export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
+  const { profile, pet } = useSignedInUser()
   const [permission, requestPermission] = useCameraPermissions()
-  const [facing, setFacing] = useState<"front" | "back">("back")
-  const [imageUri, setImageUri] = useState<string | null>(route.params?.initialImageUri || null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [estimatedVolume, setEstimatedVolume] = useState<number | null>(
-    route.params?.estimatedVolume || null,
-  )
-  const [bottleType, setBottleType] = useState<string | null>(null)
-  const [waterLevel, setWaterLevel] = useState<string | null>(null)
-  const [detectionConfidence, setDetectionConfidence] = useState<number | null>(null)
   const cameraRef = useRef<CameraView>(null)
 
-  const mode = route.params?.mode || "initial"
-  const isVerification = mode === "verification"
+  const [step, setStep] = useState<Step>("before")
+  const [capturing, setCapturing] = useState(true)
+  const [isBusy, setIsBusy] = useState(false)
+  const [before, setBefore] = useState<Reading | null>(null)
+  const [after, setAfter] = useState<Reading | null>(null)
 
   useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission()
-    }
-  }, [permission])
+    if (permission && !permission.granted && permission.canAskAgain) requestPermission()
+  }, [permission, requestPermission])
 
-  const handleTakePicture = async () => {
-    if (!cameraRef.current || !permission?.granted) {
-      Alert.alert("Permission needed", "Camera permission is required to scan bottles")
-      return
-    }
+  const phase: ScanPhase = step === "after" ? "after" : "before"
+  const current = phase === "before" ? before : after
+  const setCurrent = phase === "before" ? setBefore : setAfter
 
+  async function handleImage(uri: string) {
+    setCapturing(false)
+    setIsBusy(true)
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      })
-
-      if (photo?.uri) {
-        setImageUri(photo.uri)
-        // TODO: Process image with ML model to detect bottle type and water level
-        // For now, we'll simulate detection
-        await processImage(photo.uri)
-      }
-    } catch (error) {
-      console.error("Error taking picture:", error)
-      Alert.alert("Error", "Failed to take picture. Please try again.")
+      const reading = await analyzeBottle(
+        uri,
+        phase,
+        phase === "after" ? (before?.bottleVolume ?? null) : null,
+        phase === "after" ? (before?.waterVolume ?? null) : null,
+      )
+      setCurrent({ ...reading, imageUri: uri, adjusted: false })
+    } catch (e: any) {
+      Alert.alert("Couldn't read that photo", e?.message ?? "Please try another photo.")
+      setCapturing(true)
+    } finally {
+      setIsBusy(false)
     }
   }
 
-  const handlePickImage = async () => {
+  async function takePhoto() {
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 })
+      if (photo?.uri) await handleImage(photo.uri)
+    } catch (e: any) {
+      Alert.alert("Camera error", e?.message ?? "Couldn't take a photo.")
+    }
+  }
+
+  async function pickPhoto() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.8,
+      quality: 0.7,
     })
-
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri)
-      await processImage(result.assets[0].uri)
-    }
+    if (!result.canceled && result.assets[0]) await handleImage(result.assets[0].uri)
   }
 
-  const processImage = async (uri: string) => {
-    setIsProcessing(true)
-
-    try {
-      // Use ML model to detect bottle type and water level
-      // This will use the real ML model in development builds, or fallback to simulated detection in Expo Go
-      const detection = await detectBottleAndLevel(uri, isVerification)
-
-      // Also get tribunal estimate from OpenRouter API (using Gemini model)
-      let tribunalEstimate = null
-      try {
-        tribunalEstimate = await getTribunalEstimate(uri)
-        console.log("🏛️ Tribunal estimate received:", tribunalEstimate)
-
-        // Use tribunal estimate if available and confidence is good
-        if (tribunalEstimate && tribunalEstimate.estimate.confidence > 0.5) {
-          // Override with tribunal estimates
-          setEstimatedVolume(tribunalEstimate.estimate.waterVolume)
-          setDetectionConfidence(tribunalEstimate.estimate.confidence)
-          // Update bottle type if we have volume info
-          if (tribunalEstimate.estimate.bottleVolume > 0) {
-            setBottleType(`Bottle (${tribunalEstimate.estimate.bottleVolume}ml)`)
-          }
-        } else {
-          // Fall back to ML model detection
-          setEstimatedVolume(detection.estimatedVolume)
-          setDetectionConfidence(detection.confidence)
-          setBottleType(detection.bottleType.name)
-        }
-      } catch (tribunalError) {
-        console.warn("⚠️ Tribunal estimate failed, using ML model:", tribunalError)
-        // Fall back to ML model detection if tribunal fails
-        setEstimatedVolume(detection.estimatedVolume)
-        setDetectionConfidence(detection.confidence)
-        setBottleType(detection.bottleType.name)
-      }
-
-      // Update water level from detection (not from tribunal)
-      setWaterLevel(detection.waterLevel)
-
-      // Warn user if confidence is low
-      const finalConfidence = tribunalEstimate?.estimate.confidence || detection.confidence
-      if (finalConfidence < 0.5) {
-        Alert.alert(
-          "Low Confidence",
-          `Detection confidence is low (${Math.round(finalConfidence * 100)}%). The result may not be accurate.`,
-        )
-      }
-    } catch (error) {
-      console.error("Error processing image:", error)
-      Alert.alert("Error", "Failed to process image. Please try again.")
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleConfirm = async () => {
-    // For initial scan, we need an estimated volume to proceed
-    if (!isVerification && (estimatedVolume === null || estimatedVolume === 0)) {
-      Alert.alert("Error", "Could not detect water volume. Please try again or take another photo.")
-      return
-    }
-
-    if (isVerification) {
-      // Verify empty bottle - complete the hydration entry
-      // Use the estimated volume from the initial scan (passed via route params)
-      await completeHydrationEntry()
+  function adjust(field: "waterVolume" | "bottleVolume", delta: number) {
+    if (!current) return
+    const next = { ...current, adjusted: true, source: "manual" as const }
+    if (field === "bottleVolume") {
+      next.bottleVolume = clamp(current.bottleVolume + delta, STEP_ML, MAX_BOTTLE_ML)
+      next.waterVolume = Math.min(next.waterVolume, next.bottleVolume)
     } else {
-      // Navigate to verification screen
-      navigation.navigate("ScanBottle", {
-        mode: "verification",
-        initialImageUri: imageUri || undefined,
-        estimatedVolume: estimatedVolume || 0,
-      })
+      next.waterVolume = clamp(current.waterVolume + delta, 0, current.bottleVolume)
     }
+    setCurrent(next)
   }
 
-  const completeHydrationEntry = async (overrideVolume?: number) => {
-    setIsProcessing(true)
+  function retake() {
+    setCurrent(null)
+    setCapturing(true)
+  }
 
+  const consumed = before && after ? consumedVolume(before.waterVolume, after.waterVolume) : 0
+  const loggedAmount = Math.min(consumed, MAX_ENTRY_ML)
+
+  async function logDrink() {
+    if (!before || !after || loggedAmount <= 0) return
+    setIsBusy(true)
     try {
-      const user = authService.getCurrentUser()
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
-
-      // Get user profile to check daily goal
-      const profile = await databaseService.getUserProfile(user.uid)
-      if (!profile?.stats) {
-        Alert.alert("Error", "User profile not found. Please complete onboarding.")
-        navigation.replace("Onboarding")
-        return
-      }
-
-      // Use override volume if provided
-      // In verification mode, use the volume from the initial scan (route params)
-      // Otherwise, use current estimated volume or fall back to route params
-      const volumeToLog =
-        overrideVolume ??
-        (isVerification ? route.params?.estimatedVolume : estimatedVolume) ??
-        route.params?.estimatedVolume ??
-        0
-
-      if (volumeToLog === 0) {
-        Alert.alert("Error", "No water volume detected. Please scan your bottle first.")
-        return
-      }
-
-      // Check for overdrinking
-      const todayIntake = await databaseService.getUserHydrationToday(user.uid)
-      const totalAfter = todayIntake + volumeToLog
-      const shouldFlag = totalAfter > profile.stats.dailyWaterGoal * 1.5
-
-      if (shouldFlag) {
-        Alert.alert("⚠️ Slow Down!", "You're drinking a lot today! Stay safe and hydrated.")
-      }
-
-      // Filter out data URIs (base64 images) - they're too large for Firestore
-      // Only store file:// URIs or Firebase Storage URLs
-      const isDataUri = (uri: string | null | undefined) => uri?.startsWith("data:") ?? false
-      const beforeImageUri =
-        route.params?.initialImageUri && !isDataUri(route.params.initialImageUri)
-          ? route.params.initialImageUri
-          : undefined
-      const afterImageUri = imageUri && !isDataUri(imageUri) ? imageUri : undefined
-
-      // Add hydration entry
-      await databaseService.addHydrationEntry({
-        userId: user.uid,
-        amount: volumeToLog,
-        bottleType: bottleType || undefined,
-        verified: true,
+      const source: EstimateSource =
+        before.adjusted || after.adjusted
+          ? "manual"
+          : before.source === "ai" && after.source === "ai"
+            ? "ai"
+            : before.source === "manual" || after.source === "manual"
+              ? "manual"
+              : "on-device"
+      await databaseService.logHydration({
+        profile,
+        amount: loggedAmount,
+        beforeVolume: before.waterVolume,
+        afterVolume: after.waterVolume,
+        bottleVolume: before.bottleVolume,
+        source,
       })
-
-      // Update pet
-      const pet = await databaseService.getPet(user.uid)
-      if (pet) {
-        const petUpdates = updatePetAfterHydration(pet, volumeToLog)
-        await databaseService.updatePet(user.uid, petUpdates)
-      }
-
-      // Navigate to Home screen first
-      setIsProcessing(false)
-      navigation.navigate("Home")
-
-      // Show success alert after a short delay to ensure navigation completes
-      setTimeout(() => {
-        Alert.alert("Success! 💧", `Logged ${volumeToLog}ml of water!`)
-      }, 300)
-    } catch (error) {
-      console.error("Error completing hydration entry:", error)
-      setIsProcessing(false)
-
-      // Navigate to Home screen even on error
-      navigation.navigate("Home")
-
-      // Show error alert after navigation
-      setTimeout(() => {
-        Alert.alert("Error", "Failed to log hydration. Please try again.")
-      }, 300)
+      navigation.goBack()
+      Alert.alert(
+        "Logged! 💧",
+        pet
+          ? `${loggedAmount} ml. ${pet.name} gained ${xpForWater(loggedAmount)} XP.`
+          : `${loggedAmount} ml.`,
+      )
+    } catch (e: any) {
+      setIsBusy(false)
+      Alert.alert("Couldn't log drink", e?.message ?? "Please try again.")
     }
   }
 
-  if (!permission) {
+  // ---------- Render ----------
+
+  if (step !== "review" && capturing) {
+    if (!permission)
+      return (
+        <Centered>
+          <ActivityIndicator size="large" />
+        </Centered>
+      )
+    if (!permission.granted) {
+      return (
+        <Screen
+          preset="fixed"
+          contentContainerStyle={themed($padded)}
+          safeAreaEdges={["top", "bottom"]}
+        >
+          <Text preset="heading" text="Camera access needed" />
+          <Text text="HydroHype uses the camera to estimate how much water is in your bottle." />
+          <Button text="Grant permission" preset="reversed" onPress={requestPermission} />
+          <Button text="Choose from gallery instead" onPress={pickPhoto} />
+          <Button text="Cancel" onPress={() => navigation.goBack()} />
+        </Screen>
+      )
+    }
     return (
-      <Screen preset="fixed" contentContainerStyle={themed($screenContentContainer)}>
-        <ActivityIndicator size="large" />
-      </Screen>
-    )
-  }
-
-  if (!permission.granted) {
-    return (
-      <Screen preset="fixed" contentContainerStyle={themed($screenContentContainer)}>
-        <Text preset="heading" text="Camera Permission Required" />
-        <Text text="We need camera access to scan your water bottle." />
-        <Button text="Grant Permission" onPress={requestPermission} />
-      </Screen>
-    )
-  }
-
-  return (
-    <Screen preset="fixed" contentContainerStyle={themed($screenContentContainer)}>
-      <View style={themed($cameraContainer)}>
-        {imageUri ? (
-          <View style={themed($imageContainer)}>
-            <Image source={{ uri: imageUri }} style={themed($previewImage)} />
-            {isProcessing && (
-              <View style={themed($processingOverlay)}>
-                <ActivityIndicator size="large" color={theme.colors.palette.accent500} />
-                <Text text="Processing..." style={themed($processingText)} />
-              </View>
-            )}
-
-            {!isProcessing && estimatedVolume && (
-              <View style={themed($detectionInfo)}>
-                <Text
-                  preset="subheading"
-                  text={isVerification ? "Empty Bottle Detected" : "Bottle Detected"}
-                />
-                {bottleType ? <Text text={`Type: ${bottleType}`} /> : null}
-
-                <Text preset="heading" text={`Volume: ${estimatedVolume}ml`} />
-                {detectionConfidence !== null && (
-                  <Text
-                    text={`Confidence: ${Math.round(detectionConfidence * 100)}%`}
-                    style={
-                      detectionConfidence < 0.5
-                        ? { color: theme.colors.palette.angry500 }
-                        : undefined
-                    }
-                  />
-                )}
-              </View>
-            )}
+      <Screen
+        preset="fixed"
+        contentContainerStyle={themed($fill)}
+        safeAreaEdges={["top", "bottom"]}
+      >
+        <CameraView ref={cameraRef} style={$camera} facing="back">
+          <View style={themed($cameraOverlay)}>
+            <Text
+              preset="subheading"
+              style={$white}
+              text={`Step ${phase === "before" ? 1 : 2} of 2`}
+            />
+            <Text
+              preset="heading"
+              style={$white}
+              text={phase === "before" ? "Photo before drinking" : "Photo after drinking"}
+            />
+            <Text
+              style={$white}
+              text={
+                phase === "before"
+                  ? "Fit the whole bottle in the frame, side-on."
+                  : "Same bottle, same angle, after you've had your drink."
+              }
+            />
           </View>
-        ) : (
-          <CameraView
-            ref={cameraRef}
-            style={themed($camera)}
-            facing={facing}
-            onCameraReady={() => console.log("Camera ready")}
-          >
-            <View style={themed($cameraOverlay)}>
-              <Text
-                preset="heading"
-                text={isVerification ? "Scan Empty Bottle" : "Scan Your Bottle"}
-              />
-              <Text
-                text={
-                  isVerification
-                    ? "Take a photo showing the bottle is empty"
-                    : "Point camera at your water bottle"
-                }
-              />
-            </View>
-          </CameraView>
-        )}
-      </View>
+        </CameraView>
+        <View style={themed($controls)}>
+          <Button text="📸 Take photo" preset="reversed" onPress={takePhoto} />
+          <View style={themed($row)}>
+            <Button text="Gallery" onPress={pickPhoto} style={$flex} />
+            <Button
+              text={phase === "after" ? "Back" : "Cancel"}
+              onPress={() =>
+                phase === "after" ? (setStep("before"), setCapturing(false)) : navigation.goBack()
+              }
+              style={$flex}
+            />
+          </View>
+        </View>
+      </Screen>
+    )
+  }
 
-      <View style={themed($controls)}>
-        {imageUri ? (
-          <>
-            <View style={themed($buttonRow)}>
-              <Button
-                text="Retake"
-                onPress={() => {
-                  setImageUri(null)
-                  setEstimatedVolume(null)
-                  setBottleType(null)
-                  setWaterLevel(null)
-                  setDetectionConfidence(null)
-                }}
-                style={themed($button)}
-                preset="reversed"
-              />
-              {estimatedVolume && (
-                <Button
-                  text={isVerification ? "Confirm Empty" : "Confirm & Verify"}
-                  onPress={handleConfirm}
-                  style={themed($button)}
-                  disabled={isProcessing}
-                />
-              )}
-            </View>
-          </>
-        ) : (
-          <>
-            <Button
-              text="Take Photo"
-              onPress={handleTakePicture}
-              style={themed($button)}
-              preset="default"
-            />
-            <Button
-              text="Choose from Gallery"
-              onPress={handlePickImage}
-              style={themed($button)}
-              preset="reversed"
-            />
-            <Button
-              text="Flip Camera"
-              onPress={() => setFacing(facing === "back" ? "front" : "back")}
-              style={themed($button)}
-              preset="reversed"
-            />
-          </>
+  if (step === "review" && before && after) {
+    return (
+      <Screen
+        preset="scroll"
+        contentContainerStyle={themed($padded)}
+        safeAreaEdges={["top", "bottom"]}
+      >
+        <Text preset="heading" text="Confirm your drink" />
+        <View style={themed($row)}>
+          <Thumb uri={before.imageUri} label={`Before: ${before.waterVolume} ml`} />
+          <Thumb uri={after.imageUri} label={`After: ${after.waterVolume} ml`} />
+        </View>
+        <View style={themed($bigNumber)}>
+          <Text text="You drank" />
+          <Text preset="heading" text={`${consumed} ml`} />
+          {consumed > MAX_ENTRY_ML && (
+            <Text size="sm" text={`Single entries are capped at ${MAX_ENTRY_ML} ml.`} />
+          )}
+        </View>
+        {loggedAmount <= 0 && (
+          <Text
+            text="The after photo shows as much water as before. Go back and adjust if that's wrong."
+            style={{ color: theme.colors.error }}
+          />
         )}
-      </View>
+        <Button
+          text={isBusy ? "Saving…" : `Log ${loggedAmount} ml`}
+          preset="reversed"
+          onPress={logDrink}
+          disabled={isBusy || loggedAmount <= 0}
+        />
+        <Button text="Back" onPress={() => setStep("after")} disabled={isBusy} />
+      </Screen>
+    )
+  }
+
+  // Reading view (after a photo in the before/after step)
+  return (
+    <Screen
+      preset="scroll"
+      contentContainerStyle={themed($padded)}
+      safeAreaEdges={["top", "bottom"]}
+    >
+      <Text preset="heading" text={phase === "before" ? "Before drinking" : "After drinking"} />
+      {current && <Image source={{ uri: current.imageUri }} style={themed($preview)} />}
+
+      {isBusy || !current ? (
+        <View style={themed($bigNumber)}>
+          <ActivityIndicator size="large" color={theme.colors.tint} />
+          <Text text="Estimating volume…" />
+        </View>
+      ) : (
+        <>
+          <Text
+            size="sm"
+            style={themed($dim)}
+            text={
+              `${SOURCE_TEXT[current.source]}` +
+              (current.confidence !== null
+                ? ` · ${Math.round(current.confidence * 100)}% confident`
+                : "")
+            }
+          />
+          {!!current.note && <Text size="sm" text={current.note} />}
+          {current.confidence !== null && current.confidence < 0.5 && !current.adjusted && (
+            <Text
+              size="sm"
+              style={{ color: theme.colors.error }}
+              text="Low confidence. Check the numbers."
+            />
+          )}
+
+          <Stepper
+            label={phase === "before" ? "Water in bottle" : "Water left"}
+            value={current.waterVolume}
+            onChange={(d) => adjust("waterVolume", d)}
+          />
+          {phase === "before" && (
+            <Stepper
+              label="Bottle size"
+              value={current.bottleVolume}
+              onChange={(d) => adjust("bottleVolume", d)}
+            />
+          )}
+
+          <Button
+            text={phase === "before" ? "Next: photo after drinking" : "Review"}
+            preset="reversed"
+            disabled={phase === "before" && current.waterVolume <= 0}
+            onPress={() => {
+              if (phase === "before") {
+                setStep("after")
+                setCapturing(!after)
+              } else {
+                setStep("review")
+              }
+            }}
+          />
+          <Button text="Retake photo" onPress={retake} />
+        </>
+      )}
     </Screen>
   )
 }
 
-const $screenContentContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flex: 1,
+const Stepper: FC<{ label: string; value: number; onChange: (delta: number) => void }> = ({
+  label,
+  value,
+  onChange,
+}) => {
+  const { themed } = useAppTheme()
+  return (
+    <View style={themed($stepper)}>
+      <Text preset="bold" text={label} style={$flex} />
+      <StepButton text="−" onPress={() => onChange(-STEP_ML)} label={`Decrease ${label}`} />
+      <Text preset="subheading" text={`${value} ml`} style={$stepValue} />
+      <StepButton text="+" onPress={() => onChange(STEP_ML)} label={`Increase ${label}`} />
+    </View>
+  )
+}
+
+const StepButton: FC<{ text: string; label: string; onPress: () => void }> = ({
+  text,
+  label,
+  onPress,
+}) => {
+  const { themed } = useAppTheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={themed($stepButton)}
+    >
+      <Text preset="subheading" text={text} />
+    </Pressable>
+  )
+}
+
+const Thumb: FC<{ uri: string; label: string }> = ({ uri, label }) => {
+  const { themed } = useAppTheme()
+  return (
+    <View style={$flex}>
+      <Image source={{ uri }} style={themed($thumb)} />
+      <Text size="sm" text={label} style={$centerText} />
+    </View>
+  )
+}
+
+const Centered: FC<{ children: ReactNode }> = ({ children }) => (
+  <View style={[$flex, $center]}>{children}</View>
+)
+
+const $flex: ViewStyle = { flex: 1 }
+const $center: ViewStyle = { alignItems: "center", justifyContent: "center" }
+const $white: TextStyle = { color: "#FFFFFF", textAlign: "center" }
+const $centerText: TextStyle = { textAlign: "center" }
+const $camera: ViewStyle = { flex: 1 }
+const $stepValue: TextStyle = { minWidth: 90, textAlign: "center" }
+
+const $fill: ThemedStyle<ViewStyle> = () => ({ flex: 1 })
+
+const $padded: ThemedStyle<ViewStyle> = ({ spacing }) => ({ padding: spacing.lg, gap: spacing.md })
+
+const $cameraOverlay: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  backgroundColor: "rgba(0,0,0,0.45)",
   padding: spacing.md,
-})
-
-const $cameraContainer: ThemedStyle<ViewStyle> = () => ({
-  flex: 1,
-  marginBottom: 16,
-})
-
-const $camera: ThemedStyle<ViewStyle> = () => ({
-  flex: 1,
-})
-
-const $cameraOverlay: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  flex: 1,
-  backgroundColor: "rgba(0,0,0,0.5)",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: spacing.lg,
-})
-
-const $imageContainer: ThemedStyle<ViewStyle> = () => ({
-  flex: 1,
-  position: "relative",
-})
-
-const $previewImage: ThemedStyle<ImageStyle> = () => ({
-  width: "100%",
-  height: "100%",
-  resizeMode: "contain",
-})
-
-const $processingOverlay: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.7)",
-  justifyContent: "center",
-  alignItems: "center",
-})
-
-const $processingText: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
-  marginTop: 16,
-  color: colors.palette.neutral100,
-})
-
-const $detectionInfo: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  position: "absolute",
-  bottom: 0,
-  left: 0,
-  right: 0,
-  backgroundColor: colors.palette.neutral100,
-  padding: spacing.lg,
-  borderTopLeftRadius: 16,
-  borderTopRightRadius: 16,
+  gap: spacing.xxs,
 })
 
 const $controls: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  padding: spacing.md,
   gap: spacing.sm,
 })
 
-const $buttonRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $row: ThemedStyle<ViewStyle> = ({ spacing }) => ({ flexDirection: "row", gap: spacing.sm })
+
+const $preview: ThemedStyle<ImageStyle> = ({ colors }) => ({
+  width: "100%",
+  height: 280,
+  borderRadius: 12,
+  resizeMode: "contain",
+  backgroundColor: colors.palette.neutral300,
+})
+
+const $thumb: ThemedStyle<ImageStyle> = ({ colors }) => ({
+  width: "100%",
+  height: 160,
+  borderRadius: 12,
+  resizeMode: "cover",
+  backgroundColor: colors.palette.neutral300,
+})
+
+const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
+
+const $bigNumber: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  alignItems: "center",
+  paddingVertical: spacing.md,
+  gap: spacing.xs,
+})
+
+const $stepper: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   flexDirection: "row",
-  gap: spacing.sm,
+  alignItems: "center",
+  gap: spacing.xs,
+  padding: spacing.sm,
+  borderRadius: 12,
+  backgroundColor: colors.palette.neutral100,
 })
 
-const $button: ThemedStyle<ViewStyle> = () => ({
-  flex: 1,
+const $stepButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: colors.palette.water100,
 })

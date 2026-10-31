@@ -1,14 +1,8 @@
 /* eslint-disable import/first */
 /**
- * Welcome to the main entry point of the app. In this file, we'll
- * be kicking off our app.
- *
- * Most of this file is boilerplate and you shouldn't need to modify
- * it very often. But take some time to look through and understand
- * what is going on here.
- *
- * The app navigation resides in ./app/navigators, so head over there
- * if you're interested in adding screens and navigators.
+ * App entry point: loads fonts and translations, then renders the navigator
+ * inside the auth and theme providers. Screens live in ./screens and routing
+ * rules in ./navigators/AppNavigator.tsx.
  */
 if (__DEV__) {
   // Load Reactotron in development only.
@@ -21,56 +15,34 @@ import "./utils/gestureHandler"
 import { useEffect, useState } from "react"
 import { useFonts } from "expo-font"
 import * as Linking from "expo-linking"
-import { Platform, View } from "react-native"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
 import { AuthProvider } from "./context/AuthContext"
 import { initI18n } from "./i18n"
 import { AppNavigator } from "./navigators/AppNavigator"
 import { useNavigationPersistence } from "./navigators/navigationUtilities"
+import { loadModel } from "./services/ml/waterLevelClassifier"
 import { ThemeProvider } from "./theme/context"
 import { customFontsToLoad } from "./theme/typography"
 import { loadDateFnsLocale } from "./utils/formatDate"
 import * as storage from "./utils/storage"
 
-// KeyboardProvider disabled for Expo Go compatibility
-// react-native-keyboard-controller requires react-native-worklets which has version mismatch in Expo Go
-// (JS version 0.6.1 vs native version 0.5.1 in Expo Go)
-// The app works without KeyboardProvider, just without enhanced keyboard handling
-const SafeKeyboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Skip KeyboardProvider entirely for Expo Go compatibility
-  // In development builds, you can enable KeyboardProvider if worklets version matches
-  return <>{children}</>
-}
-
 export const NAVIGATION_PERSISTENCE_KEY = "NAVIGATION_STATE"
 
-// Web linking configuration
+// Deep links / web URLs. Screens that aren't in the current stack (e.g. Home
+// while signed out) are ignored by React Navigation.
 const prefix = Linking.createURL("/")
 const config = {
   screens: {
-    Login: {
-      path: "",
-    },
-    Welcome: "welcome",
-    Demo: {
-      screens: {
-        DemoShowroom: {
-          path: "showroom/:queryIndex?/:itemIndex?",
-        },
-        DemoDebug: "debug",
-        DemoPodcastList: "podcast",
-        DemoCommunity: "community",
-      },
-    },
+    Login: "",
+    SignUp: "signup",
+    Home: "home",
+    ScanBottle: "scan",
+    Leaderboard: "leaderboard",
+    FriendPet: "friend/:userId",
   },
 }
 
-/**
- * This is the root component of our app.
- * @param {AppProps} props - The props for the `App` component.
- * @returns {JSX.Element} The rendered `App` component.
- */
 export function App() {
   const {
     initialNavigationState,
@@ -85,59 +57,28 @@ export function App() {
     initI18n()
       .then(() => setIsI18nInitialized(true))
       .then(() => loadDateFnsLocale())
-    
-    // Initialize ML model (will fail gracefully in Expo Go)
-    const initML = async () => {
-      try {
-        const { initializeTensorFlow, loadMLModel } = await import("@/services/ml/waterLevelClassifier")
-        await initializeTensorFlow()
-        await loadMLModel()
-        console.log("✅ ML model loaded successfully")
-      } catch (error: any) {
-        // Expected in Expo Go - model requires native code
-        if (error.message?.includes("Expo Go") || error.message?.includes("native modules")) {
-          console.warn("⚠️  ML model not available in Expo Go. Use a development build to enable ML features.")
-        } else {
-          console.warn("⚠️  ML model not available, using fallback detection:", error.message)
-        }
-      }
-    }
-    initML()
+
+    // Optional on-device model; resolves false in Expo Go or on web
+    loadModel()
   }, [])
 
-  // Before we show the app, we have to wait for our state to be ready.
-  // In the meantime, don't render anything. This will be the background
-  // color set in native by rootView's background color.
-  // In iOS: application:didFinishLaunchingWithOptions:
-  // In Android: https://stackoverflow.com/a/45838109/204044
-  // You can replace with your own loading component if you wish.
+  // Render nothing (the native splash stays up) until fonts, i18n and
+  // navigation state are ready.
   if (!isNavigationStateRestored || !isI18nInitialized || (!areFontsLoaded && !fontLoadError)) {
     return null
   }
 
-  const linking = {
-    prefixes: [prefix],
-    config,
-  }
-
-  // otherwise, we're ready to render the app
-  const AppContent = (
-    <AuthProvider>
-      <ThemeProvider>
-        <AppNavigator
-          linking={linking}
-          initialState={initialNavigationState}
-          onStateChange={onNavigationStateChange}
-        />
-      </ThemeProvider>
-    </AuthProvider>
-  )
-
-  // Skip KeyboardProvider entirely in Expo Go due to react-native-worklets version mismatch
-  // KeyboardProvider requires worklets which has different versions in Expo Go vs dev builds
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <SafeKeyboardProvider>{AppContent}</SafeKeyboardProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppNavigator
+            linking={{ prefixes: [prefix], config }}
+            initialState={initialNavigationState}
+            onStateChange={onNavigationStateChange}
+          />
+        </ThemeProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   )
 }

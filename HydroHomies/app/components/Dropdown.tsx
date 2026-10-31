@@ -50,12 +50,11 @@ export function Dropdown({
       {/* The Trigger Box - Matches TextField inputWrapperStyle */}
       <TouchableOpacity onPress={toggleDropdown} style={$dropdownBox} activeOpacity={0.7}>
         <Text
-          style={{
-            flex: 1,
-            color: selectedLabel ? "#000000" : theme.colors.textDim, // Black if selected, Dim if placeholder
-            fontFamily: theme.typography.primary.normal,
-            fontSize: 16,
-          }}
+          style={[
+            $valueText,
+            { fontFamily: theme.typography.primary.normal },
+            !selectedLabel && { color: theme.colors.textDim },
+          ]}
         >
           {selectedLabel || placeholder}
         </Text>
@@ -73,9 +72,7 @@ export function Dropdown({
               keyExtractor={(item) => item.value}
               renderItem={({ item }) => (
                 <TouchableOpacity style={$optionItem} onPress={() => handleSelect(item)}>
-                  <Text style={{ fontSize: 16, color: "black", paddingVertical: 10 }}>
-                    {item.label}
-                  </Text>
+                  <Text style={$optionText}>{item.label}</Text>
                   {item.value === value && <Feather name="check" size={18} color="blue" />}
                 </TouchableOpacity>
               )}
@@ -112,6 +109,10 @@ const $label: ThemedStyle<TextStyle> = () => ({
   fontSize: 16,
   lineHeight: 24,
 })
+
+const $valueText: TextStyle = { flex: 1, color: "#000000", fontSize: 16 }
+
+const $optionText: TextStyle = { fontSize: 16, color: "#000000", paddingVertical: 10 }
 
 const $overlay: ViewStyle = {
   flex: 1,

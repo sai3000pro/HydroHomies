@@ -2,25 +2,19 @@ import { ComponentProps } from "react"
 import { NavigationContainer } from "@react-navigation/native"
 import { NativeStackScreenProps } from "@react-navigation/native-stack"
 
-// App Stack Navigator types
 export type AppStackParamList = {
-  Welcome: undefined
   Login: undefined
   SignUp: undefined
+  /** Collects body stats for accounts that don't have them yet */
   Onboarding: undefined
-  Home: undefined
   PetSelect: undefined
-  ScanBottle: {
-    mode?: "initial" | "verification"
-    initialImageUri?: string
-    estimatedVolume?: number
-  }
+  Home: undefined
+  ScanBottle: undefined
   Leaderboard: undefined
   FriendPet: {
     userId: string
     displayName: string
   }
-  // 🔥 Your screens go here
   // IGNITE_GENERATOR_ANCHOR_APP_STACK_PARAM_LIST
 }
 
@@ -32,3 +26,12 @@ export type AppStackScreenProps<T extends keyof AppStackParamList> = NativeStack
 export interface NavigationProps extends Partial<
   ComponentProps<typeof NavigationContainer<AppStackParamList>>
 > {}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace ReactNavigation {
+    // Types useNavigation() for every screen
+    // eslint-disable-next-line @typescript-eslint/no-empty-interface
+    interface RootParamList extends AppStackParamList {}
+  }
+}

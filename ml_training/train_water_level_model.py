@@ -441,10 +441,9 @@ def main():
     print("✅ Training pipeline completed successfully!")
     print("=" * 60)
     print(f"\n📦 Next steps:")
-    print(f"1. Copy the TensorFlow.js model to your React Native app:")
-    print(f"   cp -r {TENSORFLOWJS_OUTPUT_DIR}/* <your-react-native-app>/assets/models/")
-    print(f"\n2. Update your React Native code to load and use the model")
-    print(f"\n3. Model location: {TENSORFLOWJS_OUTPUT_DIR}")
+    print(f"1. Install the model into the app (copies, patches for tfjs, verifies):")
+    print(f"   bash ml_training/setup_model_for_app.sh")
+    print(f"\n2. Model location: {TENSORFLOWJS_OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

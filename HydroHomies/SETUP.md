@@ -1,253 +1,99 @@
-# HydroHype (AquaGotchi) - Setup Guide
+# HydroHype setup
 
-## 🎯 Project Overview
+All commands run from `HydroHomies/HydroHomies/` unless noted.
 
-HydroHype is a mobile application that gamifies hydration by combining:
+## 1. Install
 
-- **Computer Vision**: Automatic water bottle detection and level classification
-- **Social Competition**: Real-time leaderboards
-- **Virtual Pet**: Tamagotchi-style pet that grows with hydration
-
-## 📋 Prerequisites
-
-- Node.js >= 20.0.0
-- npm or yarn
-- Expo CLI (installed globally: `npm install -g expo-cli`)
-- Firebase account and project
-- iOS Simulator / Android Emulator or physical device with Expo Go
-
-## 🚀 Installation Steps
-
-### 1. Install Dependencies
+Requires Node 20+.
 
 ```bash
-cd HydroHomies/HydroHomies
 npm install
-
-# Install additional required packages
-npm install firebase expo-camera expo-image-picker expo-image-manipulator expo-media-library
+npm --prefix functions install
 ```
 
-### 2. Firebase Setup
+## 2. Firebase
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project or select an existing one
-3. Enable Authentication:
-   - Go to Authentication > Sign-in method
-   - Enable Email/Password authentication
-4. Create a Firestore Database:
-   - Go to Firestore Database
-   - Create database in test mode (or production with rules)
-   - Set up security rules (see below)
-5. Get your Firebase configuration:
-   - Go to Project Settings > General
-   - Scroll to "Your apps" and add a web app (or use existing)
-   - Copy the config values
+The app is wired to the `hydrohype-9fa73` project (see `.firebaserc`). To use your own:
 
-### 3. Configure Firebase
+1. Create a project at https://console.firebase.google.com and add a **Web app**.
+2. Enable **Authentication → Email/Password** and create a **Firestore** database.
+3. Put the web config in `.env` (these values aren't secret; the rules below control access):
 
-Update `/app/services/firebase/config.ts` with your Firebase credentials:
-
-```typescript
-const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id",
-}
-```
-
-**Or use environment variables (recommended for production):**
-
-Create a `.env` file in the root directory:
-
-```
-EXPO_PUBLIC_FIREBASE_API_KEY=your-api-key
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
-```
-
-### 4. Firestore Security Rules
-
-Set up these security rules in Firebase Console > Firestore Database > Rules:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Users can read/write their own profile
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Users can create hydration entries, read their own
-    match /hydrationEntries/{entryId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || request.query.limit <= 10);
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    // Users can read/write their own pet
-    match /pets/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-### 5. Run the App
-
-```bash
-# Start Expo development server
-npm start
-
-# Or for specific platforms
-npm run ios      # iOS Simulator
-npm run android  # Android Emulator
-```
-
-Scan the QR code with Expo Go app on your device, or press `i` for iOS simulator, `a` for Android emulator.
-
-## 🤖 ML Model Integration (Future Work)
-
-The app currently uses placeholder functions for bottle detection and water level classification. To integrate the actual ML model:
-
-1. **Download the Dataset:**
-
-   ```python
-   import kagglehub
-   path = kagglehub.dataset_download("chethuhn/water-bottle-dataset")
-   print("Path to dataset files:", path)
+   ```bash
+   EXPO_PUBLIC_FIREBASE_API_KEY=...
+   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+   EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+   EXPO_PUBLIC_FIREBASE_APP_ID=...
    ```
 
-2. **Train the Model:**
-   - Use TensorFlow, PyTorch, or ML Kit
-   - Train on the water bottle dataset
-   - Convert to TensorFlow Lite (.tflite) or ONNX format
+4. Update `.firebaserc` and the `--project` flag in the `deploy:*` scripts in `package.json`.
+5. Deploy the security rules and the leaderboard index:
 
-3. **Integrate with React Native:**
-   - Use `@tensorflow/tfjs-react-native` or `react-native-ml-kit`
-   - Update `/app/services/ml/waterLevelClassifier.ts`
-   - Update `/app/screens/ScanBottleScreen.tsx` to use actual model inference
+   ```bash
+   npm run deploy:firestore
+   ```
 
-4. **Update the Camera Screen:**
-   - Replace placeholder `detectBottleTypeSimulated()` with actual detection
-   - Replace placeholder `detectWaterLevelSimulated()` with ML model classification
-   - Implement `estimateVolumeSimulated()` with actual volume estimation
+### Data model
 
-## 📱 App Flow
+| Collection | Doc id | Who can read | Contents |
+| --- | --- | --- | --- |
+| `users` | `{uid}` | owner | email, username, body stats, daily goal |
+| `pets` | `{uid}` | any signed-in user | name, species, experience, health, lastFed |
+| `hydrationEntries` | auto | owner | one logged drink: amount, before/after volume, source |
+| `dailySummaries` | `{uid}_{YYYY-MM-DD}` | any signed-in user | day total, goal, display name, pet summary (drives the leaderboard) |
+| `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting |
 
-1. **Onboarding**: User enters height, weight, age, activity level
-   - App calculates daily water goal
-   - User names their pet
-   - Pet is initialized
+Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`).
 
-2. **Scan Bottle**:
-   - User points camera at water bottle
-   - App detects bottle type and water level (using ML model)
-   - User confirms or retakes photo
+Accounts created by the hackathon build stored the pet at `users/{uid}.pet`. It's moved to `pets/{uid}` automatically the next time that user signs in.
 
-3. **Verification**:
-   - User must scan empty bottle to verify they drank the water
-   - Can be skipped (with warning)
+## 3. AI bottle estimate (Cloud Function)
 
-4. **Rewards**:
-   - Pet gains experience and evolves
-   - Hydration logged and displayed on home screen
-   - Leaderboard updates in real-time
+`functions/` holds a callable function, `estimateBottle`. It sends the photo to a vision model on [OpenRouter](https://openrouter.ai) and returns the bottle size, the water volume and a confidence score. The API key stays on the server. Each user gets 60 calls per day, and each scan uses two.
 
-5. **Social Features**:
-   - View leaderboard of friends
-   - Visit friends' pets to see their status
+Cloud Functions require the Blaze (pay-as-you-go) plan.
 
-## 🗂️ Project Structure
-
-```
-app/
-├── components/          # Reusable components (Pet, Button, etc.)
-├── context/            # React Context (AuthContext)
-├── navigators/         # Navigation setup
-├── screens/            # Screen components
-│   ├── OnboardingScreen.tsx
-│   ├── HomeScreen.tsx
-│   ├── ScanBottleScreen.tsx
-│   ├── LeaderboardScreen.tsx
-│   └── FriendPetScreen.tsx
-├── services/
-│   ├── firebase/       # Firebase configuration and services
-│   └── ml/            # ML model integration (placeholder)
-└── utils/             # Utility functions
-    ├── waterGoalCalculator.ts
-    └── petEvolution.ts
+```bash
+npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project hydrohype-9fa73
+npm run deploy:functions
 ```
 
-## 🔧 Troubleshooting
+The default model is `google/gemini-2.5-flash`. To change it, set `OPENROUTER_MODEL` in `functions/.env`.
 
-### Camera Permission Issues
+**Local development without deploying.** If you set `EXPO_PUBLIC_OPENROUTER_API_KEY` in `.env`, **dev builds** call OpenRouter directly whenever the function call fails. `EXPO_PUBLIC_*` values are embedded in the app bundle, so never set this for a release build. The code ignores it outside `__DEV__`.
 
-- iOS: Check Info.plist has `NSCameraUsageDescription`
-- Android: Check AndroidManifest.xml has camera permission
-- Both are configured in `app.json`
+If neither path is available, the scan screen falls back to the on-device model or to manual entry. Logging still works.
 
-### Firebase Connection Issues
+## 4. Run
 
-- Verify Firebase config values are correct
-- Check Firebase project is active
-- Ensure Authentication is enabled
-- Verify Firestore database is created
+```bash
+npm start            # Expo dev server (Expo Go works, minus the on-device model)
+npm run android      # dev build on a device/emulator (enables the on-device model)
+npm run ios
+```
 
-### Build Errors
+Camera scanning needs a physical device. On an emulator, use **Gallery**.
 
-- Clear cache: `expo start -c`
-- Reinstall dependencies: `rm -rf node_modules && npm install`
-- Check Node.js version: `node --version` (should be >= 20.0.0)
+## 5. On-device model (optional)
 
-## 📝 Environment Variables
+`assets/models/water-level-classifier/` contains a MobileNetV2 classifier with three classes: `half`, `full` and `overflowing`. It reached about 80% validation accuracy on 356 Kaggle images. It runs only in dev or production builds (TF.js React Native needs native modules), and only for the *before* photo, because the dataset has no "empty" class. The AI estimate takes priority when it's available.
 
-For production, use environment variables instead of hardcoding Firebase config:
+The model was exported from Keras 3, and tfjs 4.x can't read that format directly. `scripts/patch-keras3-model.js` rewrites it: Keras 2 style input shapes and inbound nodes, the nested MobileNet graph flattened, and depthwise weight names fixed.
 
-1. Install `expo-constants` if not already installed
-2. Create `.env` file (already gitignored)
-3. Prefix variables with `EXPO_PUBLIC_` to make them available in the app
-4. Access via `process.env.EXPO_PUBLIC_FIREBASE_API_KEY`
+```bash
+npm run model:verify   # loads the bundled model with tfjs in Node and runs one prediction
+```
 
-## 🎨 Customization
+To retrain, see `../ml_training/README.md`, then run `bash ../ml_training/setup_model_for_app.sh`. That script copies the model, patches it and verifies it.
 
-- **Pet Types**: Edit `/app/components/Pet.tsx` to add new pet types
-- **Activity Levels**: Modify `/app/utils/waterGoalCalculator.ts` for different calculation formulas
-- **Pet Evolution**: Update thresholds in `/app/utils/petEvolution.ts`
+## 6. Checks
 
-## 📚 Additional Resources
-
-- [Expo Documentation](https://docs.expo.dev/)
-- [Firebase Documentation](https://firebase.google.com/docs)
-- [React Navigation](https://reactnavigation.org/)
-- [Expo Camera](https://docs.expo.dev/versions/latest/sdk/camera/)
-- [Water Bottle Dataset](https://www.kaggle.com/datasets/chethuhn/water-bottle-dataset)
-
-## 🚧 Future Enhancements
-
-- [ ] Implement actual ML model for bottle detection
-- [ ] Add OCR for label reading
-- [ ] Web search integration for bottle database
-- [ ] Friend system (add/remove friends)
-- [ ] Push notifications for hydration reminders
-- [ ] Weekly/monthly statistics
-- [ ] Social sharing features
-- [ ] Custom pet themes/styles
-- [ ] Achievements/badges system
-
-## 📄 License
-
-[Your License Here]
-
-## 👥 Contributors
-
-[Your Name/Team]
+```bash
+npm run compile      # TypeScript
+npm run lint:check   # ESLint + Prettier
+npm test             # Jest: goal formula, pet rules, estimate parsing, storage, i18n keys
+npm run model:verify
+npm run test:maestro # E2E; needs a dev build and -e TEST_EMAIL=... -e TEST_PASSWORD=...
+```

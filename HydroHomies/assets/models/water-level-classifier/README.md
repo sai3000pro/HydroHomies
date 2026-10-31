@@ -1,30 +1,11 @@
-# Water Level Classification Model
+# Water level classifier (TF.js)
 
-This directory should contain the trained TensorFlow.js model files for water level classification.
+MobileNetV2 (alpha 0.35, 224�224 input) fine-tuned on the Kaggle `chethuhn/water-bottle-dataset`.
 
-## 📦 Model Files Required
+- Classes, in output order: `half`, `full`, `overflowing` (see `class_labels.json`)
+- Input: RGB scaled to [0, 1]
+- About 80% validation accuracy on 356 images
 
-After training the model (see `../../../../ml_training/train_water_level_model.py`), copy these files here:
+`model.json` was exported from Keras 3 and rewritten by `scripts/patch-keras3-model.js` so tfjs 4.x can load it. Run `npm run model:verify` after replacing these files.
 
-- `model.json` - Model architecture
-- `*.bin` - Model weights (multiple files)
-- `class_labels.json` - Class labels mapping
-- `model_metadata.json` - Model configuration
-
-## 🚀 Quick Setup
-
-After training the model:
-
-```bash
-# From the ml_training directory
-./setup_model_for_app.sh
-
-# Or manually:
-cp -r ml_training/models/tensorflowjs_model/* HydroHomies/assets/models/water-level-classifier/
-```
-
-## 📚 See Also
-
-- `ML_MODEL_SETUP.md` - Complete setup guide
-- `ml_training/README.md` - Training documentation
-- `ml_training/train_water_level_model.py` - Training script
+Loaded by `app/services/ml/waterLevelClassifier.ts`. It only runs in dev or production builds, not Expo Go.

@@ -1,84 +1,90 @@
-import { PetState } from "@/services/firebase/database"
-
 /**
- * Calculates pet experience and evolution based on hydration progress
+ * Pet growth rules. Pure functions so they can be unit-tested and shared by
+ * every screen that displays a pet.
+ *
+ * Stored on the pet document: experience, health, lastFed.
+ * Derived here: level, stage, XP progress, and health after decay.
  */
 
-export interface PetEvolution {
-  type: PetState["type"]
-  level: number
-  experience: number
-  health: number
-  name: string
+export const PET_SPECIES = ["elephant", "alien", "sphele"] as const
+export type PetSpecies = (typeof PET_SPECIES)[number]
+
+export const SPECIES_DISPLAY_NAMES: Record<PetSpecies, string> = {
+  elephant: "Hydrophant",
+  alien: "Agualien",
+  sphele: "Sphele",
 }
 
-const EXPERIENCE_PER_100ML = 10
-const HEALTH_DECAY_PER_HOUR = 1
-const EXPERIENCE_THRESHOLDS = {
-  seed: 0,
-  sprout: 100,
-  plant: 300,
-  flower: 600,
-  droplet: 1000,
-  fish: 1500,
+export type PetStage = "Baby" | "Kid" | "Teen" | "Adult" | "Legend"
+
+/** 10 XP per 100 ml, so a 2.5 L day is 250 XP */
+export const XP_PER_100ML = 10
+export const XP_PER_LEVEL = 100
+/** Health lost per hour without water. A full pet becomes "thirsty" (<40) after ~20 hours. */
+export const HEALTH_DECAY_PER_HOUR = 3
+export const THIRSTY_HEALTH = 40
+
+const STAGE_MIN_LEVEL: [PetStage, number][] = [
+  ["Legend", 50],
+  ["Adult", 30],
+  ["Teen", 15],
+  ["Kid", 5],
+  ["Baby", 1],
+]
+
+export function isPetSpecies(value: unknown): value is PetSpecies {
+  return typeof value === "string" && (PET_SPECIES as readonly string[]).includes(value)
+}
+
+export function xpForWater(waterMl: number): number {
+  return Math.max(0, Math.floor((waterMl / 100) * XP_PER_100ML))
+}
+
+export function levelForXp(experience: number): number {
+  return 1 + Math.floor(Math.max(0, experience) / XP_PER_LEVEL)
+}
+
+/** XP gained within the current level, and XP needed to reach the next one */
+export function levelProgress(experience: number): { current: number; needed: number } {
+  return { current: Math.max(0, experience) % XP_PER_LEVEL, needed: XP_PER_LEVEL }
+}
+
+export function stageForLevel(level: number): PetStage {
+  for (const [stage, min] of STAGE_MIN_LEVEL) if (level >= min) return stage
+  return "Baby"
+}
+
+/** Health after decay since the pet was last fed */
+export function currentHealth(
+  storedHealth: number,
+  lastFed: Date | null,
+  now: Date = new Date(),
+): number {
+  if (!lastFed) return clampHealth(storedHealth)
+  const hours = Math.max(0, (now.getTime() - lastFed.getTime()) / 3_600_000)
+  return clampHealth(Math.round(storedHealth - hours * HEALTH_DECAY_PER_HOUR))
 }
 
 /**
- * Calculates pet type based on experience
+ * New stored values after the owner drinks `waterMl`.
+ * Health recovers in proportion to the daily goal: drinking your whole goal
+ * restores 100 health, half your goal restores 50.
  */
-export function calculatePetType(experience: number): PetState["type"] {
-  if (experience >= EXPERIENCE_THRESHOLDS.fish) return "fish"
-  if (experience >= EXPERIENCE_THRESHOLDS.droplet) return "droplet"
-  if (experience >= EXPERIENCE_THRESHOLDS.flower) return "flower"
-  if (experience >= EXPERIENCE_THRESHOLDS.plant) return "plant"
-  if (experience >= EXPERIENCE_THRESHOLDS.sprout) return "sprout"
-  return "seed"
-}
-
-/**
- * Calculates pet level (0-100) based on experience
- */
-export function calculatePetLevel(experience: number): number {
-  const maxExperience = 2000 // Max experience for level 100
-  return Math.min(100, Math.round((experience / maxExperience) * 100))
-}
-
-/**
- * Calculates health based on last fed time
- * Health decreases over time if not hydrated
- */
-export function calculatePetHealth(lastFed: Date, currentHealth: number): number {
-  const hoursSinceLastFed = (Date.now() - lastFed.getTime()) / (1000 * 60 * 60)
-  const healthLoss = Math.floor(hoursSinceLastFed * HEALTH_DECAY_PER_HOUR)
-  return Math.max(0, currentHealth - healthLoss)
-}
-
-/**
- * Adds experience to pet based on water intake
- */
-export function addHydrationExperience(currentExperience: number, waterAmountMl: number): number {
-  const experienceGain = Math.floor((waterAmountMl / 100) * EXPERIENCE_PER_100ML)
-  return currentExperience + experienceGain
-}
-
-/**
- * Updates pet state after hydration
- * Note: lastFed should be set to serverTimestamp() when calling updatePet
- * This function returns a partial state that should be merged with serverTimestamp for lastFed
- */
-export function updatePetAfterHydration(
-  currentPet: PetState,
-  waterAmountMl: number,
-): Partial<Omit<PetState, "lastFed">> {
-  const newExperience = addHydrationExperience(currentPet.experience, waterAmountMl)
-  const newType = calculatePetType(newExperience)
-  const newLevel = calculatePetLevel(newExperience)
-
+export function feedPet(
+  pet: { experience: number; health: number; lastFed: Date | null },
+  waterMl: number,
+  dailyGoalMl: number,
+  now: Date = new Date(),
+): { experience: number; health: number } {
+  const healthNow = currentHealth(pet.health, pet.lastFed, now)
+  const goal = dailyGoalMl > 0 ? dailyGoalMl : 2500
   return {
-    experience: newExperience,
-    type: newType,
-    level: newLevel,
-    health: 100, // Reset health when fed
-    // Note: lastFed should be set separately using serverTimestamp() in the service layer
+    experience: Math.max(0, pet.experience) + xpForWater(waterMl),
+    health: clampHealth(Math.round(healthNow + (waterMl / goal) * 100)),
   }
+}
+
+function clampHealth(h: number): number {
+  if (!Number.isFinite(h)) return 0
+  return Math.max(0, Math.min(100, h))
 }

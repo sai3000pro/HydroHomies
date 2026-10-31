@@ -1,11 +1,18 @@
-import { initializeApp, getApps, FirebaseApp } from "firebase/app"
-import { getAuth, initializeAuth, getReactNativePersistence, Auth } from "firebase/auth"
-import { getFirestore, Firestore } from "firebase/firestore"
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Platform } from "react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import { getApp, getApps, initializeApp } from "firebase/app"
+import {
+  Auth,
+  getAuth,
+  initializeAuth,
+  // @ts-expect-error -- only exported by the React Native build of @firebase/auth, which Metro resolves
+  getReactNativePersistence,
+} from "firebase/auth"
+import { getFirestore } from "firebase/firestore"
+import { getFunctions } from "firebase/functions"
 
-// Firebase configuration
-// Values from Firebase Console -> Project Settings -> General -> Your apps
+// Firebase web config. These values identify the project and are not secrets;
+// access is controlled by firestore.rules. Override them with EXPO_PUBLIC_FIREBASE_* in .env.
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyASVhkeR4SIlgTpQUfDUeTkEeRBwvM4awc",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "hydrohype-9fa73.firebaseapp.com",
@@ -16,81 +23,29 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:1035226290940:web:7db3946b1d05691f471579",
 }
 
-// Check if Firebase is configured (not using placeholder values)
-const isFirebaseConfigured =
-  firebaseConfig.apiKey &&
-  firebaseConfig.apiKey !== "your-api-key" &&
-  firebaseConfig.projectId &&
-  firebaseConfig.projectId !== "your-project-id" &&
-  firebaseConfig.authDomain &&
-  firebaseConfig.authDomain !== "your-project.firebaseapp.com"
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.apiKey !== "your-api-key",
+)
 
-if (!isFirebaseConfigured && __DEV__) {
-  console.warn(
-    "⚠️ Firebase is not configured!\n" +
-      "Please update app/services/firebase/config.ts with your Firebase credentials.\n" +
-      "Get them from: https://console.firebase.google.com/ -> Project Settings -> General",
-  )
-}
+export const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
-let app: FirebaseApp
-let auth: Auth
-let db: Firestore
-
-// Firebase initializeApp won't throw on invalid config, it only fails when you try to use it
-// So we can safely initialize even with placeholder values
-if (getApps().length === 0) {
-  console.log("Initializing Firebase app...")
+function createAuth(): Auth {
+  if (Platform.OS === "web") return getAuth(app)
   try {
-    app = initializeApp(firebaseConfig)
-    console.log("Firebase app initialized successfully")
+    // Persist the session across app restarts
+    return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })
   } catch (error: any) {
-    console.error("Firebase initialization error:", error)
-    // If initialization fails, try to continue anyway - errors will show when using auth/db
-    throw error
-  }
-} else {
-  app = getApps()[0]
-  console.log("Using existing Firebase app")
-}
-
-// Initialize Firebase Auth with AsyncStorage persistence for React Native
-// IMPORTANT: initializeAuth must be called BEFORE getAuth to configure persistence
-// getAuth() will auto-initialize auth if it doesn't exist, preventing us from configuring persistence
-// So we MUST try initializeAuth first, then fall back to getAuth if it's already initialized
-
-if (Platform.OS !== "web") {
-  // For React Native (iOS/Android), try initializeAuth with AsyncStorage persistence first
-  try {
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
-    })
-    console.log("✅ Firebase auth initialized with AsyncStorage persistence")
-  } catch (initError: any) {
-    // If initializeAuth fails, auth is likely already initialized
-    // Check error code to see if it's "already-initialized"
-    if (initError.code === "auth/already-initialized" || initError.message?.includes("already initialized")) {
-      console.warn("⚠️  Firebase auth already initialized - using existing instance")
-      console.warn("    (Persistence may not be configured. Clear app data to re-initialize with persistence)")
-      auth = getAuth(app)
-    } else {
-      // Other error - try getAuth as fallback
-      console.warn("⚠️  Error initializing auth with persistence, falling back to getAuth:", initError.message)
-      auth = getAuth(app)
+    // Fast refresh re-runs this module after auth already exists
+    if (error?.code !== "auth/already-initialized") {
+      console.warn("Auth persistence unavailable, falling back to in-memory auth:", error?.message)
     }
+    return getAuth(app)
   }
-} else {
-  // For web, use default getAuth (handles persistence automatically via localStorage)
-  auth = getAuth(app)
-  console.log("✅ Firebase auth initialized for web (uses localStorage)")
 }
 
-try {
-  db = getFirestore(app)
-  console.log("✅ Firebase auth and firestore initialized successfully")
-} catch (error: any) {
-  console.error("❌ Error initializing firestore:", error)
-  throw error
-}
-
-export { app, auth, db, isFirebaseConfigured }
+export const auth = createAuth()
+export const db = getFirestore(app)
+export const functions = getFunctions(
+  app,
+  process.env.EXPO_PUBLIC_FIREBASE_FUNCTIONS_REGION || "us-central1",
+)

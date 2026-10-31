@@ -4,150 +4,140 @@ import {
   PropsWithChildren,
   useCallback,
   useContext,
-  useMemo,
   useEffect,
+  useMemo,
   useState,
 } from "react"
-import { User, onAuthStateChanged } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
+import { onAuthStateChanged, User } from "firebase/auth"
 
 import { authService } from "@/services/firebase/auth"
-import { auth, db } from "@/services/firebase/config"
-import { databaseService } from "@/services/firebase/database"
+import { auth } from "@/services/firebase/config"
+import { databaseService, type PetState, type UserProfile } from "@/services/firebase/database"
 
 export type AuthContextType = {
-  isAuthenticated: boolean
   user: User | null
-  authEmail?: string
-  setAuthEmail: (email: string) => void
+  isAuthenticated: boolean
+  /** Live private profile. null means the document doesn't exist (yet). */
+  profile: UserProfile | null
+  /** Live pet. null means the user hasn't adopted one. */
+  pet: PetState | null
+  /** True until the first profile and pet snapshots arrive for the signed-in user */
+  isUserDataLoading: boolean
+  /**
+   * Set while SignUpScreen creates the auth account and profile, so the
+   * navigator doesn't route to Onboarding before the profile write lands.
+   */
+  isSigningUp: boolean
+  setIsSigningUp: (v: boolean) => void
   logout: () => Promise<void>
-  validationError: string
-  pet: object
-  setPet: (any) => void
-  userProfile: object
-  setUserProfile: (any) => void
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
 
-export interface AuthProviderProps {}
-
-export const AuthProvider: FC<PropsWithChildren<AuthProviderProps>> = ({ children }) => {
+export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [userProfile, setUserProfile] = useState(null)
-  const [pet, setPet] = useState(null)
-  const [authEmail, setAuthEmail] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [pet, setPet] = useState<PetState | null>(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
+  const [petLoaded, setPetLoaded] = useState(false)
+  // Hold the navigator on a spinner while sign-up runs, and until the new
+  // profile snapshot (with stats) arrives, so Onboarding never flashes.
+  const [isSigningUp, setIsSigningUpState] = useState(false)
+  const [awaitingProfile, setAwaitingProfile] = useState(false)
+  const setIsSigningUp = useCallback((v: boolean) => {
+    setIsSigningUpState(v)
+    if (!v) setAwaitingProfile(true)
+  }, [])
+  useEffect(() => {
+    if (awaitingProfile && (profile?.stats || !user)) setAwaitingProfile(false)
+  }, [awaitingProfile, profile, user])
+  // If the profile write failed, stop waiting after a few seconds (user lands on Onboarding)
+  useEffect(() => {
+    if (!awaitingProfile) return
+    const t = setTimeout(() => setAwaitingProfile(false), 5000)
+    return () => clearTimeout(t)
+  }, [awaitingProfile])
 
   useEffect(() => {
-    try {
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        setUser(firebaseUser)
-        if (firebaseUser) {
-          setAuthEmail(firebaseUser.email || "")
-
-          // Ensure user profile exists
-          try {
-            const profile = await databaseService.getUserProfile(firebaseUser.uid)
-            if (!profile) {
-              await databaseService.createUserProfile(
-                firebaseUser.uid,
-                firebaseUser.email || "",
-                firebaseUser.displayName || undefined,
-              )
-            }
-          } catch (error) {
-            console.error("Error checking/creating user profile:", error)
-          }
-        } else {
-          setAuthEmail("")
-        }
-        setIsLoading(false)
-      })
-
-      return unsubscribe
-    } catch (error) {
-      console.error("Error setting up auth state listener:", error)
-      setIsLoading(false)
-      return () => {} // Return empty cleanup function
-    }
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser)
+      setIsAuthLoading(false)
+    })
   }, [])
 
-  const logout = useCallback(async () => {
-    try {
-      await authService.signOut()
-      setUser(null)
-      setAuthEmail("")
-    } catch (error) {
-      console.error("Error signing out:", error)
-      throw error
-    }
-  }, [])
-
-  const loadUserData = async () => {
-    if (!user) {
-      setUserProfile(null)
-      setPet(null)
-      return
-    }
-
-    try {
-      // 1. Create a reference to the specific user's document
-      const userDocRef = doc(db, "users", user.uid)
-
-      // 2. Fetch the document
-      const userDocSnap = await getDoc(userDocRef)
-
-      if (userDocSnap.exists()) {
-        const data = userDocSnap.data()
-
-        // 3. Update Profile State
-        // (You might need to cast 'data' to your UserProfile type if using TypeScript)
-        setUserProfile(data as any)
-
-        // 4. Update Pet State
-        // Since we saved 'pet' as a field inside this same document, we just grab it here.
-        if (data.pet) {
-          setPet(data.pet)
-        } else {
-          setPet(null)
-        }
-      } else {
-        console.log("No user document found!")
-      }
-    } catch (error) {
-      console.error("Error getting user profile", error)
-    }
-  }
-
+  // Live profile + pet for the signed-in user
   useEffect(() => {
-    loadUserData()
+    setProfile(null)
+    setPet(null)
+    setProfileLoaded(false)
+    setPetLoaded(false)
+    if (!user) return
+
+    const unsubProfile = databaseService.subscribeToProfile(
+      user.uid,
+      (p) => {
+        setProfile(p)
+        setProfileLoaded(true)
+      },
+      (e) => {
+        console.warn("Profile subscription failed:", e.message)
+        setProfileLoaded(true)
+      },
+    )
+    const unsubPet = databaseService.subscribeToPet(
+      user.uid,
+      (p) => {
+        setPet(p)
+        setPetLoaded(true)
+      },
+      (e) => {
+        console.warn("Pet subscription failed:", e.message)
+        setPetLoaded(true)
+      },
+    )
+
+    // Hackathon builds stored the pet inside users/{uid}.pet; move it once.
+    databaseService
+      .migrateLegacyPet(user.uid, user.displayName ?? "")
+      .catch((e) => console.warn("Legacy pet migration failed:", e.message))
+
+    return () => {
+      unsubProfile()
+      unsubPet()
+    }
   }, [user])
 
-  const validationError = useMemo(() => {
-    if (!authEmail || authEmail.length === 0) return "can't be blank"
-    if (authEmail.length < 6) return "must be at least 6 characters"
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authEmail)) return "must be a valid email address"
-    return ""
-  }, [authEmail])
+  const logout = useCallback(async () => {
+    await authService.signOut()
+  }, [])
 
-  const value = {
-    isAuthenticated: !!user,
-    user,
-    userProfile,
-    setUserProfile,
-    pet,
-    setPet,
-    authEmail,
-    setAuthEmail,
-    logout,
-    validationError,
-  }
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      profile,
+      pet,
+      isUserDataLoading: !!user && (!profileLoaded || !petLoaded),
+      isSigningUp: isSigningUp || awaitingProfile,
+      setIsSigningUp,
+      logout,
+    }),
+    [
+      user,
+      profile,
+      pet,
+      profileLoaded,
+      petLoaded,
+      isSigningUp,
+      awaitingProfile,
+      setIsSigningUp,
+      logout,
+    ],
+  )
 
-  // Don't render children until auth state is determined
-  if (isLoading) {
-    return null
-  }
+  // Render nothing until Firebase restores (or rules out) a session
+  if (isAuthLoading) return null
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
@@ -156,4 +146,11 @@ export const useAuth = () => {
   const context = useContext(AuthContext)
   if (!context) throw new Error("useAuth must be used within an AuthProvider")
   return context
+}
+
+/** For screens that only render when signed in with a complete profile */
+export const useSignedInUser = () => {
+  const { user, profile, pet } = useAuth()
+  if (!user || !profile) throw new Error("useSignedInUser requires a signed-in user with a profile")
+  return { user, profile, pet }
 }
