@@ -12,5 +12,7 @@ __pycache__/
 .venv/
 venv/
 
-# graphify knowledge-graph output
-graphify-out/
+# graphify: commit the current graph, not caches or dated snapshots
+graphify-out/cache/
+graphify-out/20*/
+graphify-out/.graphify_*
