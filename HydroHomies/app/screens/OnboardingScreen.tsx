@@ -80,7 +80,7 @@ export const OnboardingScreen: FC<OnboardingScreenProps> = () => {
       {goal !== null && (
         <View style={themed($goalBox)}>
           <Text size="sm" text="Your daily goal" />
-          <Text preset="heading" text={`${(goal / 1000).toFixed(1)} L`} />
+          <Text preset="heading" text={`${(goal / 1000).toFixed(2)} L`} />
         </View>
       )}
 

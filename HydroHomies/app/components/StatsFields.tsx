@@ -2,7 +2,7 @@ import { FC } from "react"
 import { View, ViewStyle } from "react-native"
 
 import { Dropdown } from "@/components/Dropdown"
-import { TextField } from "@/components/TextField"
+import { LABEL_ON_LIGHT, TextField } from "@/components/TextField"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import {
@@ -64,10 +64,14 @@ export function previewGoal(values: StatsFormValues): number | null {
 interface StatsFieldsProps {
   values: StatsFormValues
   onChange: (values: StatsFormValues) => void
+  /** Use black labels, for screens with a fixed light background */
+  onLight?: boolean
 }
 
-export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
+export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange, onLight }) => {
   const { themed } = useAppTheme()
+  const labelProps = onLight ? LABEL_ON_LIGHT : undefined
+  const dropdownLabel = onLight ? LABEL_ON_LIGHT.style : undefined
   const set =
     <K extends keyof StatsFormValues>(key: K) =>
     (v: StatsFormValues[K]) =>
@@ -81,6 +85,7 @@ export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
           options={SEX_OPTIONS}
           value={values.sex}
           onSelect={(v) => set("sex")(v as Sex)}
+          labelStyle={dropdownLabel}
           containerStyle={$half}
         />
         <TextField
@@ -89,6 +94,7 @@ export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
           onChangeText={set("age")}
           keyboardType="number-pad"
           containerStyle={$half}
+          LabelTextProps={labelProps}
           placeholder="25"
         />
       </View>
@@ -99,6 +105,7 @@ export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
           onChangeText={set("height")}
           keyboardType="decimal-pad"
           containerStyle={$half}
+          LabelTextProps={labelProps}
           placeholder="170"
         />
         <TextField
@@ -107,6 +114,7 @@ export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
           onChangeText={set("weight")}
           keyboardType="decimal-pad"
           containerStyle={$half}
+          LabelTextProps={labelProps}
           placeholder="70"
         />
       </View>
@@ -115,6 +123,7 @@ export const StatsFields: FC<StatsFieldsProps> = ({ values, onChange }) => {
         options={ACTIVITY_OPTIONS}
         value={values.activityLevel}
         onSelect={(v) => set("activityLevel")(v as ActivityLevel)}
+        labelStyle={dropdownLabel}
       />
     </View>
   )

@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from "react"
 import { TextStyle, View, ViewStyle } from "react-native"
 
+import { ActionTile } from "@/components/ActionTile"
 import { Button } from "@/components/Button"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
@@ -15,6 +16,7 @@ import {
 import { syncReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { confirmAction } from "@/utils/confirm"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
@@ -22,7 +24,7 @@ interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
 const SOURCE_LABEL: Record<HydrationEntry["source"], string> = {
   "ai": "AI estimate",
   "on-device": "On-device model",
-  "manual": "Manual",
+  "manual": "Entered by hand",
 }
 
 export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
@@ -70,16 +72,13 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <Screen preset="scroll" contentContainerStyle={themed($container)} safeAreaEdges={["top"]}>
       <View style={themed($header)}>
-        <View style={$flex}>
-          <Text preset="heading" text="HydroHype 💧" />
-          <Text text={`Welcome back, ${profile.username || "friend"}!`} />
-        </View>
-        <Button text="Log out" onPress={logout} style={themed($logout)} textStyle={$small} />
+        <Text preset="heading" text="HydroHype 💧" style={$title} numberOfLines={1} />
+        <Text style={themed($dim)} text={`Welcome back, ${profile.username || "friend"}!`} />
       </View>
 
       {pet && (
         <View style={themed($card)}>
-          <Pet pet={pet} size="large" />
+          <Pet pet={pet} size="medium" />
         </View>
       )}
 
@@ -97,9 +96,14 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
 
         <View style={$centered}>
           <Text preset="heading" text={`${(todayIntake / 1000).toFixed(2)} L`} />
-          <Text size="sm" text={`of ${(dailyGoal / 1000).toFixed(1)} L goal`} />
+          <Text size="sm" text={`of ${(dailyGoal / 1000).toFixed(2)} L goal`} />
         </View>
-        <View style={themed($progressTrack)}>
+        <View
+          style={themed($progressTrack)}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: 100, now: progress }}
+        >
           <View
             style={[
               $progressFill,
@@ -115,36 +119,34 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           text={remaining > 0 ? `${remaining} ml to go` : "Goal reached! 🎉"}
           style={themed($dimCentered)}
         />
-      </View>
-
-      <View style={themed($actions)}>
         <Button
           text="💧 Log Water"
           preset="reversed"
+          style={themed($logButton)}
           onPress={() => navigation.navigate("ScanBottle")}
         />
-        <Button text="🏆 Leaderboard" onPress={() => navigation.navigate("Leaderboard")} />
-        <View style={themed($actionRow)}>
-          <Button text="📊 Stats" style={$flex} onPress={() => navigation.navigate("Stats")} />
-          <Button text="👥 Friends" style={$flex} onPress={() => navigation.navigate("Friends")} />
-        </View>
-        <View style={themed($actionRow)}>
-          <Button
-            text="📷 My profile"
-            style={$flex}
-            onPress={() =>
-              navigation.navigate("FriendPet", {
-                userId: profile.uid,
-                displayName: profile.username,
-              })
-            }
-          />
-          <Button
-            text="⏰ Reminders"
-            style={$flex}
-            onPress={() => navigation.navigate("Reminders")}
-          />
-        </View>
+      </View>
+
+      <View style={themed($tiles)}>
+        <ActionTile
+          emoji="🏆"
+          label="Leaderboard"
+          wide
+          onPress={() => navigation.navigate("Leaderboard")}
+        />
+        <ActionTile emoji="👥" label="Friends" onPress={() => navigation.navigate("Friends")} />
+        <ActionTile emoji="📊" label="Stats" onPress={() => navigation.navigate("Stats")} />
+        <ActionTile
+          emoji="📷"
+          label="My profile"
+          onPress={() =>
+            navigation.navigate("FriendPet", {
+              userId: profile.uid,
+              displayName: profile.username,
+            })
+          }
+        />
+        <ActionTile emoji="⏰" label="Reminders" onPress={() => navigation.navigate("Reminders")} />
       </View>
 
       {!!loadError && (
@@ -154,8 +156,8 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       {entries.length > 0 && (
         <View style={themed($card)}>
           <Text preset="subheading" text="Today's Drinks" style={themed($sectionTitle)} />
-          {entries.map((entry) => (
-            <View key={entry.id} style={themed($entryRow)}>
+          {entries.map((entry, i) => (
+            <View key={entry.id} style={[themed($entryRow), i === entries.length - 1 && $lastRow]}>
               <View>
                 <Text preset="bold" text={`${entry.amount} ml`} />
                 <Text size="xs" text={SOURCE_LABEL[entry.source]} style={themed($dim)} />
@@ -173,29 +175,45 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           ))}
         </View>
       )}
+
+      <Button
+        text="Log out"
+        onPress={async () => {
+          if (await confirmAction("Log out?", "You can log back in any time.", "Log out")) logout()
+        }}
+        style={themed($logout)}
+        textStyle={themed($logoutText)}
+      />
     </Screen>
   )
 }
 
-const $flex: ViewStyle = { flex: 1 }
 const $centered: ViewStyle = { alignItems: "center" }
-const $small: TextStyle = { fontSize: 14 }
+const $title: TextStyle = { fontSize: 34, lineHeight: 42 }
+const $lastRow: ViewStyle = { borderBottomWidth: 0 }
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
   gap: spacing.lg,
 })
 
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
-})
+const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.xxs })
 
 const $logout: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  minHeight: 36,
-  paddingVertical: spacing.xxs,
-  paddingHorizontal: spacing.sm,
+  minHeight: 44,
+  borderWidth: 0,
+  backgroundColor: "transparent",
+  marginBottom: spacing.lg,
+})
+
+const $logoutText: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
+
+const $logButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({ marginTop: spacing.md })
+
+const $tiles: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: spacing.md,
 })
 
 const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
@@ -228,13 +246,6 @@ const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
 const $dimCentered: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
   textAlign: "center",
-})
-
-const $actions: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.md })
-
-const $actionRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  gap: spacing.md,
 })
 
 const $error: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.error })

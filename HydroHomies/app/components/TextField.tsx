@@ -246,10 +246,16 @@ export const TextField = forwardRef(function TextField(props: TextFieldProps, re
   )
 })
 
-const $labelStyle: ThemedStyle<TextStyle> = ({ spacing }) => ({
-  color: "#000000",
+const $labelStyle: ThemedStyle<TextStyle> = ({ spacing, colors }) => ({
+  color: colors.text,
   marginBottom: spacing.xs,
 })
+
+/**
+ * For screens with a fixed light background (Login, SignUp, PetSelect), where the
+ * themed label color would be unreadable in dark mode: `LabelTextProps={LABEL_ON_LIGHT}`
+ */
+export const LABEL_ON_LIGHT = { style: { color: "#000000" } } as const
 
 const $inputWrapperStyle: ThemedStyle<ViewStyle> = ({ colors }) => ({
   alignItems: "flex-start",

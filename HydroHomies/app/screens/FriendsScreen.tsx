@@ -1,8 +1,17 @@
 import { FC, useEffect, useRef, useState } from "react"
-import { ActivityIndicator, Pressable, Share, TextStyle, View, ViewStyle } from "react-native"
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  Share,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
+import { ScreenHeader } from "@/components/ScreenHeader"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 import { useSignedInUser } from "@/context/AuthContext"
@@ -31,6 +40,7 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
   const [isAdding, setIsAdding] = useState(false)
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null)
   const creatingCode = useRef(false)
+  const [shareNote, setShareNote] = useState("")
 
   useEffect(() => {
     if (profile.friendCode) return setMyCode(profile.friendCode)
@@ -72,8 +82,18 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
       .catch((e) => setMessage({ text: e?.message ?? "Couldn't remove.", isError: true }))
   }
 
-  const shareCode = () =>
-    Share.share({ message: `Add me on HydroHype! My friend code is ${myCode} 💧` })
+  async function shareCode() {
+    const text = `Add me on HydroHype! My friend code is ${myCode} 💧`
+    try {
+      await Share.share({ message: text })
+    } catch {
+      // Desktop browsers often have no share sheet; copy instead
+      if (Platform.OS === "web" && navigator.clipboard) {
+        await navigator.clipboard.writeText(text)
+        setShareNote("Copied to your clipboard.")
+      }
+    }
+  }
 
   const canAdd = normalizeFriendCode(input).length === FRIEND_CODE_LENGTH && !isAdding
 
@@ -83,10 +103,7 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <View style={themed($header)}>
-        <Text preset="heading" text="👥 Friends" style={$flex} />
-        <Button text="Close" onPress={() => navigation.goBack()} />
-      </View>
+      <ScreenHeader title="👥 Friends" onBack={() => navigation.goBack()} />
 
       <View style={themed($card)}>
         <Text preset="subheading" text="Your friend code" />
@@ -94,6 +111,9 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
           <>
             <Text preset="heading" text={myCode} style={themed($code)} selectable />
             <Button text="Share code" onPress={shareCode} />
+            {!!shareNote && (
+              <Text size="sm" text={shareNote} style={{ color: theme.colors.palette.success500 }} />
+            )}
           </>
         ) : codeError ? (
           <Text style={{ color: theme.colors.error }} text={codeError} />
@@ -112,7 +132,8 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
         <TextField
           value={input}
           onChangeText={setInput}
-          placeholder="ABC234"
+          label="Their friend code"
+          placeholder="6 letters and numbers"
           autoCapitalize="characters"
           autoCorrect={false}
           maxLength={FRIEND_CODE_LENGTH + 2}
@@ -182,12 +203,6 @@ const $small: TextStyle = { fontSize: 14 }
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
   gap: spacing.lg,
-})
-
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
 })
 
 const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({

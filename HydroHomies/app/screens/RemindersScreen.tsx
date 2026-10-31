@@ -3,6 +3,7 @@ import { Linking, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
+import { ScreenHeader } from "@/components/ScreenHeader"
 import { Text } from "@/components/Text"
 import { Switch } from "@/components/Toggle/Switch"
 import { useSignedInUser } from "@/context/AuthContext"
@@ -67,9 +68,8 @@ export const RemindersScreen: FC<RemindersScreenProps> = ({ navigation }) => {
   if (!remindersSupported) {
     return (
       <Screen preset="scroll" contentContainerStyle={themed($container)} safeAreaEdges={["top"]}>
-        <Text preset="heading" text="⏰ Reminders" />
+        <ScreenHeader title="⏰ Reminders" onBack={() => navigation.goBack()} />
         <Text text="Reminders work in the Android and iOS apps, not on the web." />
-        <Button text="Close" onPress={() => navigation.goBack()} />
       </Screen>
     )
   }
@@ -80,10 +80,7 @@ export const RemindersScreen: FC<RemindersScreenProps> = ({ navigation }) => {
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <View style={themed($header)}>
-        <Text preset="heading" text="⏰ Reminders" style={$flex} />
-        <Button text="Close" onPress={() => navigation.goBack()} />
-      </View>
+      <ScreenHeader title="⏰ Reminders" onBack={() => navigation.goBack()} />
 
       <View style={themed($card)}>
         <Switch
@@ -185,12 +182,6 @@ const $hour: TextStyle = { flex: 1, textAlign: "center" }
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
   gap: spacing.lg,
-})
-
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
 })
 
 const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({

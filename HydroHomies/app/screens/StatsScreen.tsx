@@ -1,8 +1,8 @@
 import { FC, useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 
-import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
+import { ScreenHeader } from "@/components/ScreenHeader"
 import { Text } from "@/components/Text"
 import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
@@ -74,10 +74,7 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <View style={themed($header)}>
-        <Text preset="heading" text="📊 Stats" style={$flex} />
-        <Button text="Close" onPress={() => navigation.goBack()} />
-      </View>
+      <ScreenHeader title="📊 Stats" onBack={() => navigation.goBack()} />
 
       {!!error && <Text style={{ color: theme.colors.error }} text={error} />}
 
@@ -88,7 +85,7 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
           <View style={themed($statsRow)}>
             <StatTile emoji="🔥" value={`${currentStreak(days)}`} label="day streak" />
             <StatTile emoji="🏆" value={`${bestStreak(days)}`} label="best streak" />
-            <StatTile emoji="✅" value={`${week.daysMet}/7`} label="goals this week" />
+            <StatTile emoji="✅" value={`${week.daysMet}/7`} label="goals hit" />
           </View>
 
           <View style={themed($card)}>
@@ -167,7 +164,7 @@ const StatTile: FC<{ emoji: string; value: string; label: string }> = ({ emoji, 
     <View style={themed($tile)}>
       <Text text={emoji} />
       <Text preset="heading" text={value} />
-      <Text size="xs" style={themed($dimCentered)} text={label} />
+      <Text size="xxs" style={themed($dimCentered)} text={label} numberOfLines={1} />
     </View>
   )
 }
@@ -213,12 +210,6 @@ const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.lg,
 })
 
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
-})
-
 const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   backgroundColor: colors.palette.neutral100,
   borderRadius: 16,
@@ -236,7 +227,8 @@ const $tile: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   alignItems: "center",
   backgroundColor: colors.palette.neutral100,
   borderRadius: 16,
-  padding: spacing.md,
+  paddingVertical: spacing.md,
+  paddingHorizontal: spacing.xs,
 })
 
 const $chart: ThemedStyle<ViewStyle> = ({ spacing }) => ({

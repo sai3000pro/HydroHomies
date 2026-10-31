@@ -1,10 +1,10 @@
 import { FC, useEffect, useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 
-import { Button } from "@/components/Button"
 import { DrinkPhotoGallery } from "@/components/DrinkPhotoGallery"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
+import { ScreenHeader } from "@/components/ScreenHeader"
 import { Text } from "@/components/Text"
 import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
@@ -44,14 +44,10 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <View style={themed($header)}>
-        <Text
-          preset="heading"
-          text={isMe ? "Your profile" : `${displayName}'s pet`}
-          style={$flex}
-        />
-        <Button text="Back" onPress={() => navigation.goBack()} />
-      </View>
+      <ScreenHeader
+        title={isMe ? "Your profile" : displayName}
+        onBack={() => navigation.goBack()}
+      />
 
       {!!error && <Text style={{ color: theme.colors.error }} text={error} />}
 
@@ -84,17 +80,9 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
   )
 }
 
-const $flex: TextStyle = { flex: 1 }
-
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
   gap: spacing.lg,
-})
-
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
 })
 
 const $card: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({

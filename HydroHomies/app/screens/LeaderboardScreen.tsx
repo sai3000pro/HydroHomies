@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, TextStyle, View, ViewStyle } fr
 import { Button } from "@/components/Button"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
+import { ScreenHeader } from "@/components/ScreenHeader"
 import { Text } from "@/components/Text"
 import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
@@ -81,11 +82,13 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
         <View style={$flex}>
           <Text
             preset={isMe ? "bold" : "default"}
+            numberOfLines={1}
             text={isMe ? `${item.displayName} (you)` : item.displayName}
           />
           <Text
             size="xs"
             style={themed($dim)}
+            numberOfLines={1}
             text={
               item.petName
                 ? `${item.petName} · Lv ${levelForXp(item.petExperience)} · ${pct}% of goal`
@@ -107,17 +110,11 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <View style={themed($header)}>
-        <View style={$flex}>
-          <Text preset="heading" text="🏆 Today" />
-          <Text
-            size="sm"
-            style={themed($dim)}
-            text={myRank > 0 ? `You're #${myRank}` : "Log a drink to get on the board"}
-          />
-        </View>
-        <Button text="Close" onPress={() => navigation.goBack()} />
-      </View>
+      <ScreenHeader
+        title="🏆 Today"
+        subtitle={myRank > 0 ? `You're #${myRank}` : "Log a drink to get on the board"}
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={themed($tabs)}>
         {(["friends", "everyone"] as const).map((s) => (
@@ -171,12 +168,6 @@ const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flex: 1,
   padding: spacing.lg,
   gap: spacing.md,
-})
-
-const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.sm,
 })
 
 const $list: ThemedStyle<ViewStyle> = ({ spacing }) => ({

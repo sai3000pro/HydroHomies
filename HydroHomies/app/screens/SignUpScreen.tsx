@@ -1,5 +1,5 @@
 import { ComponentType, FC, useMemo, useState } from "react"
-import { Alert, TextStyle, View, ViewStyle } from "react-native"
+import { TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Container } from "@/components/Container"
@@ -7,7 +7,7 @@ import { PressableIcon } from "@/components/Icon"
 import { Screen } from "@/components/Screen"
 import { DEFAULT_STATS_FORM, parseStatsForm, StatsFields } from "@/components/StatsFields"
 import { Text } from "@/components/Text"
-import { TextField, type TextFieldAccessoryProps } from "@/components/TextField"
+import { LABEL_ON_LIGHT, TextField, type TextFieldAccessoryProps } from "@/components/TextField"
 import { useAuth } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { authService, describeAuthError } from "@/services/firebase/auth"
@@ -66,9 +66,8 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
         stats: parsed.stats,
       })
     } catch (e: any) {
-      const message = describeAuthError(e)
-      setErrorText(message)
-      Alert.alert("Sign up failed", message)
+      // Shown inline under the button
+      setErrorText(describeAuthError(e))
     } finally {
       setIsSigningUp(false)
       setIsLoading(false)
@@ -101,6 +100,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
         <View style={themed($mainContainer)}>
           <View style={themed($formContainer)}>
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               value={email}
               onChangeText={setEmail}
               containerStyle={themed($textField)}
@@ -112,6 +112,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
               placeholderTx="signUpScreen:emailFieldPlaceholder"
             />
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               value={username}
               onChangeText={setUsername}
               containerStyle={themed($textField)}
@@ -122,6 +123,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
               placeholderTx="signUpScreen:usernameFieldPlaceholder"
             />
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               value={password}
               onChangeText={setPassword}
               containerStyle={themed($textField)}
@@ -134,6 +136,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
               RightAccessory={PasswordRightAccessory}
             />
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               value={password2}
               onChangeText={setPassword2}
               containerStyle={themed($textField)}
@@ -144,10 +147,12 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({ navigation }) => {
               labelTx="signUpScreen:passwordField2Label"
               placeholderTx="signUpScreen:passwordField2Placeholder"
             />
-            <StatsFields values={stats} onChange={setStats} />
+            <StatsFields values={stats} onChange={setStats} onLight />
             <Button
               testID="signup-button"
-              tx="signUpScreen:tapToSignUp"
+              {...(isLoading
+                ? { text: "Creating account…" }
+                : { tx: "signUpScreen:tapToSignUp" as const })}
               style={themed($tapButton)}
               preset="reversed"
               onPress={signup}

@@ -18,6 +18,7 @@ interface DropdownProps {
   value?: string
   onSelect: (value: string) => void
   containerStyle?: ViewStyle
+  labelStyle?: TextStyle
 }
 
 export function Dropdown({
@@ -27,6 +28,7 @@ export function Dropdown({
   value,
   onSelect,
   containerStyle,
+  labelStyle,
 }: DropdownProps) {
   const [visible, setVisible] = useState(false)
   const { theme } = useAppTheme()
@@ -45,7 +47,7 @@ export function Dropdown({
   return (
     <View style={containerStyle}>
       {/* Label - Matches TextField label style exactly */}
-      {label && <Text style={themed($label)}>{label}</Text>}
+      {label && <Text style={[themed($label), labelStyle]}>{label}</Text>}
 
       {/* The Trigger Box - Matches TextField inputWrapperStyle */}
       <TouchableOpacity onPress={toggleDropdown} style={$dropdownBox} activeOpacity={0.7}>
@@ -102,8 +104,8 @@ const $dropdownBox: ViewStyle = {
   height: 42,
 }
 
-const $label: ThemedStyle<TextStyle> = () => ({
-  color: "#000000",
+const $label: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
   marginBottom: 8,
   fontFamily: "spaceGroteskMedium",
   fontSize: 16,

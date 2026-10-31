@@ -1,13 +1,13 @@
 import { ComponentType, FC, useMemo, useRef, useState } from "react"
 // eslint-disable-next-line no-restricted-imports
-import { Alert, TextInput, TextStyle, View, ViewStyle } from "react-native"
+import { TextInput, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Container } from "@/components/Container"
 import { PressableIcon } from "@/components/Icon"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { TextField, type TextFieldAccessoryProps } from "@/components/TextField"
+import { LABEL_ON_LIGHT, TextField, type TextFieldAccessoryProps } from "@/components/TextField"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { authService, describeAuthError } from "@/services/firebase/auth"
 import { isFirebaseConfigured } from "@/services/firebase/config"
@@ -50,9 +50,8 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
       // On success, AuthContext picks up the session and the navigator switches stacks
       await authService.signIn(email.trim(), password)
     } catch (e: any) {
-      const message = describeAuthError(e)
-      setErrorText(message)
-      Alert.alert("Login failed", message)
+      // Shown inline under the button
+      setErrorText(describeAuthError(e))
     } finally {
       setIsLoading(false)
     }
@@ -84,6 +83,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
         <View style={themed($mainContainer)}>
           <View style={themed($formContainer)}>
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               value={email}
               onChangeText={setEmail}
               containerStyle={themed($textField)}
@@ -99,6 +99,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
             />
 
             <TextField
+              LabelTextProps={LABEL_ON_LIGHT}
               ref={passwordInput}
               value={password}
               onChangeText={setPassword}
@@ -115,7 +116,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
 
             <Button
               testID="login-button"
-              tx="loginScreen:tapToLogIn"
+              {...(isLoading ? { text: "Logging in…" } : { tx: "loginScreen:tapToLogIn" as const })}
               style={themed($tapButton)}
               preset="reversed"
               onPress={login}

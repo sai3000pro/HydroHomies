@@ -6,7 +6,7 @@ import { Container } from "@/components/Container"
 import { PET_IMAGES } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { TextField } from "@/components/TextField"
+import { LABEL_ON_LIGHT, TextField } from "@/components/TextField"
 import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { databaseService } from "@/services/firebase/database"
@@ -76,6 +76,7 @@ export const PetSelectScreen: FC<PetSelectScreenProps> = () => {
                 style={themed($centered)}
               />
               <TextField
+                LabelTextProps={LABEL_ON_LIGHT}
                 value={name}
                 onChangeText={setName}
                 containerStyle={themed($textField)}
