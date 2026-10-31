@@ -257,8 +257,10 @@ export const databaseService = {
     bottleVolume: number | null
     source: EstimateSource
   }): Promise<{ entryId: string; totalToday: number }> {
-    const { profile, amount } = params
-    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_ENTRY_ML) {
+    const { profile } = params
+    // Stored as whole ml, so validate the rounded value (the rules reject 0)
+    const amount = Math.round(params.amount)
+    if (!Number.isFinite(amount) || amount < 1 || amount > MAX_ENTRY_ML) {
       throw new Error(`Amount must be between 1 and ${MAX_ENTRY_ML} ml`)
     }
     const uid = profile.uid

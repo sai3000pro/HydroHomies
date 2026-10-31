@@ -24,13 +24,14 @@ Run these from `HydroHomies/`:
 | `npx tsc -p functions` | 0 errors |
 | `npm run lint:check` | clean |
 | `npm test` | 7 suites, 32 tests pass (was 2 suites failing) |
+| `npm run test:rules` | 24 Firestore rules tests pass in the emulator (needs Java 21+) |
 | `npm run model:verify` | loads, outputs 3 probabilities |
 | `npx expo export --platform android` | bundles |
 
 ## Next steps, in order
 
 1. **Rotate keys.** `HydroHomies/.env` (gitignored) has `EXPO_PUBLIC_OPENROUTER_API_KEY` and `EXPO_PUBLIC_GEMINI_API_KEY`. Hackathon builds embedded these in the app bundle, so treat them as leaked. Create a new OpenRouter key and don't put it back in `.env` as `EXPO_PUBLIC_*` except for local dev.
-2. **Test the Firestore rules in the emulator** before deploying. I couldn't do this because the local Java is 1.8 and the emulator needs 11+. Paths to cover: sign-up `saveProfile`, `adoptPet`, `migrateLegacyPet`, `logHydration` (first drink of the day *and* later drinks), and leaderboard reads. A reviewer found a bug in the first-drink path and it was fixed, but the fix hasn't been tested against the emulator.
+2. ~~Test the Firestore rules in the emulator.~~ Done: `test/rules/firestore.rules.test.ts` runs the real `databaseService` against the emulator and covers `saveProfile`, `adoptPet`, `migrateLegacyPet`, `logHydration` (first drink of the day and later drinks), private entries and leaderboard reads. The first-drink fix works. Current firebase-tools needs **Java 21+**, and the system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `bin` on `PATH` before `npm run test:rules`.
 3. **Deploy.** The project needs the Blaze plan for Functions.
    ```bash
    npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project hydrohype-9fa73
@@ -46,6 +47,5 @@ Run these from `HydroHomies/`:
 - Day boundaries use the device's local date (`utils/dateKey.ts`). Users in different time zones roll over at different times.
 - The on-device model has no "empty" class, so it's only used for the *before* photo. Retraining with empty and low-level images would let it handle both photos (see `ml_training/`).
 - Hackathon-era `hydrationEntries` have no `dateKey`, so they don't appear in "Today's Drinks". That's harmless.
-- `HydroHomies/HydroHomies/.git` is a stray one-commit Ignite repo nested inside the real one. It's safe to delete, but I left it alone.
 - Health decay is computed on read (`currentHealth`), so leaderboard avatars don't show friends' current health.
 - Not built: reminders, weekly stats, achievements.

@@ -49,6 +49,16 @@ Logging a drink writes the entry, the pet update and the daily summary in one tr
 
 Accounts created by the hackathon build stored the pet at `users/{uid}.pet`. It's moved to `pets/{uid}` automatically the next time that user signs in.
 
+### Testing the rules
+
+`test/rules/firestore.rules.test.ts` runs the real `databaseService` against the Firestore emulator with `firestore.rules` loaded. It covers sign-up, adopting a pet, legacy-pet migration, logging drinks (first and later drinks of the day) and the leaderboard. Run it before every rules deploy:
+
+```bash
+npm run test:rules
+```
+
+The emulator needs **Java 21+** on `PATH`. `npm test` skips these tests because they need the emulator.
+
 ## 3. AI bottle estimate (Cloud Function)
 
 `functions/` holds a callable function, `estimateBottle`. It sends the photo to a vision model on [OpenRouter](https://openrouter.ai) and returns the bottle size, the water volume and a confidence score. The API key stays on the server. Each user gets 60 calls per day, and each scan uses two.

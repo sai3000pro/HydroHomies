@@ -1,161 +1,169 @@
-# Graph Report - HydroHomies\app  (2026-10-31)
+# Graph Report - app  (2026-10-31)
 
 ## Corpus Check
 - 88 files · ~29,438 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 581 nodes · 1368 edges · 25 communities (23 shown, 2 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 95 edges (avg confidence: 0.5)
+- 635 nodes · 1607 edges · 23 communities (20 shown, 3 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 97 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `72f1a9ad`
+- Built from commit: `48a44c9a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - context.tsx
-- Toggle.tsx
-- Text.tsx
 - useAppTheme
-- SignUpScreen.tsx
-- HomeScreen.tsx
-- AppNavigator.tsx
-- Header.tsx
+- Text.tsx
+- ScanBottleScreen.tsx
+- LoginScreen.tsx
 - PetSelectScreen.tsx
-- database.ts
+- app.tsx
+- Header.tsx
+- LeaderboardScreen.tsx
+- HomeScreen.tsx
 - i18n/index.ts
-- ListItem.tsx
+- AppNavigator.tsx
 - ErrorDetails.tsx
-- Switch.tsx
+- ReactotronConfig.ts
 - AutoImage.tsx
 - crashReporting.ts
-- ThemedStyle
-- Checkbox.tsx
-- Icon.tsx
-- styles.ts
+- SignUpScreen.tsx
+- ref_react
+- loadModel
+- config/index.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `useAppTheme()` - 65 edges
-2. `ThemedStyle` - 24 edges
-3. `Text` - 21 edges
-4. `HomeScreen()` - 19 edges
-5. `TextProps` - 18 edges
-6. `AppStackScreenProps` - 17 edges
-7. `ScanBottleScreen()` - 16 edges
-8. `TextField` - 14 edges
-9. `SignUpScreen()` - 14 edges
-10. `Pet()` - 13 edges
+2. `Text` - 44 edges
+3. `ScanBottleScreen()` - 28 edges
+4. `Button()` - 25 edges
+5. `Screen()` - 24 edges
+6. `ThemedStyle` - 24 edges
+7. `HomeScreen()` - 23 edges
+8. `SignUpScreen()` - 23 edges
+9. `TextField` - 20 edges
+10. `LoginScreen()` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Card()` --calls--> `useAppTheme()`  [EXTRACTED]
-  HydroHomies/app/components/Card.tsx → HydroHomies/app/theme/context.tsx
-- `ListItemAction()` --calls--> `useAppTheme()`  [EXTRACTED]
-  HydroHomies/app/components/ListItem.tsx → HydroHomies/app/theme/context.tsx
-- `CheckboxInput()` --calls--> `useAppTheme()`  [EXTRACTED]
-  HydroHomies/app/components/Toggle/Checkbox.tsx → HydroHomies/app/theme/context.tsx
-- `RadioInput()` --calls--> `useAppTheme()`  [EXTRACTED]
-  HydroHomies/app/components/Toggle/Radio.tsx → HydroHomies/app/theme/context.tsx
-- `SwitchAccessibilityLabel()` --calls--> `useAppTheme()`  [EXTRACTED]
-  HydroHomies/app/components/Toggle/Switch.tsx → HydroHomies/app/theme/context.tsx
+- `App()` --calls--> `AppNavigator()`  [EXTRACTED]
+  app.tsx → navigators/AppNavigator.tsx
+- `App()` --calls--> `useNavigationPersistence()`  [EXTRACTED]
+  app.tsx → navigators/navigationUtilities.ts
+- `App()` --calls--> `loadModel()`  [EXTRACTED]
+  app.tsx → services/ml/waterLevelClassifier.ts
+- `App()` --calls--> `ThemeProvider()`  [EXTRACTED]
+  app.tsx → theme/context.tsx
+- `Button()` --calls--> `useAppTheme()`  [EXTRACTED]
+  components/Button.tsx → theme/context.tsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (25 total, 2 thin omitted)
+## Communities (23 total, 3 thin omitted)
 
 ### Community 0 - "context.tsx"
-Cohesion: 0.07
-Nodes (40): colors, palette, colors, palette, ThemeContext, ThemeContextType, ThemeProvider(), ThemeProviderProps (+32 more)
+Cohesion: 0.06
+Nodes (39): colors, palette, colors, palette, ThemeContext, ThemeContextType, ThemeProvider(), ThemeProviderProps (+31 more)
 
-### Community 1 - "Toggle.tsx"
-Cohesion: 0.16
-Nodes (11): $inputOuter, $radioDetail, RadioInput(), RadioToggleProps, FieldLabel(), $helper(), $inputOuterBase, $inputWrapper (+3 more)
+### Community 1 - "useAppTheme"
+Cohesion: 0.06
+Nodes (51): HeaderActionProps, BaseIconProps, Icon(), IconProps, iconRegistry, IconTypes, $imageStyleBase, PressableIconProps (+43 more)
 
 ### Community 2 - "Text.tsx"
 Cohesion: 0.06
-Nodes (42): ButtonAccessoryProps, ButtonProps, Presets, $pressedTextPresets, $pressedViewPresets, $textPresets, $viewPresets, $alignmentWrapper (+34 more)
+Nodes (40): ButtonAccessoryProps, ButtonProps, Presets, $pressedTextPresets, $pressedViewPresets, $textPresets, $viewPresets, $alignmentWrapper (+32 more)
 
-### Community 3 - "useAppTheme"
-Cohesion: 0.07
-Nodes (49): Button(), $bigNumber(), $camera, $cameraOverlay(), $center, $centerText, $controls(), $dim() (+41 more)
+### Community 3 - "ScanBottleScreen.tsx"
+Cohesion: 0.06
+Nodes (53): Text, $bigNumber(), $camera, $cameraOverlay(), $center, Centered(), $centerText, $controls() (+45 more)
 
-### Community 4 - "SignUpScreen.tsx"
-Cohesion: 0.09
-Nodes (35): Container(), ContainerProps, $heading(), $innerBox(), $outerBox(), AuthContext, AuthContextType, $error() (+27 more)
+### Community 4 - "LoginScreen.tsx"
+Cohesion: 0.20
+Nodes (17): Container(), ContainerProps, $heading(), $innerBox(), $outerBox(), PressableIcon(), $error(), $formContainer() (+9 more)
 
-### Community 5 - "HomeScreen.tsx"
-Cohesion: 0.09
-Nodes (34): AppStackScreenProps, $card(), $container(), $dim(), $flex, FriendPetScreen(), FriendPetScreenProps, $header() (+26 more)
+### Community 5 - "PetSelectScreen.tsx"
+Cohesion: 0.06
+Nodes (44): AutoScreenProps, BaseScreenProps, $containerStyle, DEFAULT_BOTTOM_OFFSET, FixedScreenProps, $innerStyle, isNonScrolling(), $justifyFlexEnd (+36 more)
 
-### Community 6 - "AppNavigator.tsx"
-Cohesion: 0.07
-Nodes (33): App(), config, NAVIGATION_PERSISTENCE_KEY, prefix, BaseConfig, ConfigBaseProps, PersistNavigationConfig, Config (+25 more)
+### Community 6 - "app.tsx"
+Cohesion: 0.15
+Nodes (8): App(), config, NAVIGATION_PERSISTENCE_KEY, prefix, AuthProvider(), initI18n(), loadDateFnsLocale(), Options
 
 ### Community 7 - "Header.tsx"
-Cohesion: 0.08
-Nodes (33): $actionFillerContainer, $actionIconContainer(), $actionText(), $actionTextContainer(), $container, Header(), HeaderAction(), HeaderProps (+25 more)
+Cohesion: 0.13
+Nodes (20): $actionFillerContainer, $actionIconContainer(), $actionText(), $actionTextContainer(), $container, Header(), HeaderAction(), HeaderProps (+12 more)
 
-### Community 8 - "PetSelectScreen.tsx"
-Cohesion: 0.07
-Nodes (54): Bar(), $barContainer(), $barFill, $barTrack(), $centered(), $container(), $dim(), $faded (+46 more)
-
-### Community 9 - "database.ts"
+### Community 8 - "LeaderboardScreen.tsx"
 Cohesion: 0.08
-Nodes (41): ACTIVITY_OPTIONS, $container(), DEFAULT_STATS_FORM, $half, parseStatsForm(), previewGoal(), $row(), SEX_OPTIONS (+33 more)
+Nodes (41): Bar(), $barContainer(), $barFill, $barTrack(), $centered(), $container(), $dim(), $faded (+33 more)
+
+### Community 9 - "HomeScreen.tsx"
+Cohesion: 0.06
+Nodes (54): AuthContext, AuthContextType, useAuth(), useSignedInUser(), $actions(), $card(), $centered, $container() (+46 more)
 
 ### Community 10 - "i18n/index.ts"
-Cohesion: 0.13
+Cohesion: 0.11
 Nodes (19): ar, DeepPartial, en, PartialTranslations, Translations, es, fr, hi (+11 more)
 
-### Community 11 - "ListItem.tsx"
-Cohesion: 0.16
-Nodes (10): HeaderActionProps, IconTypes, $iconContainer, ListItem, ListItemAction(), ListItemActionProps, ListItemProps, $textStyle() (+2 more)
+### Community 11 - "AppNavigator.tsx"
+Cohesion: 0.22
+Nodes (10): AppNavigator(), AppStack(), $loading, Stack, AppStackParamList, NavigationProps, ReactNavigation, RootParamList (+2 more)
 
 ### Community 12 - "ErrorDetails.tsx"
-Cohesion: 0.14
+Cohesion: 0.15
 Nodes (13): ErrorBoundary, Props, State, $contentContainer(), $errorBacktrace(), $errorContent(), ErrorDetails(), ErrorDetailsProps (+5 more)
 
-### Community 13 - "Switch.tsx"
-Cohesion: 0.17
-Nodes (11): $inputOuter, $switchAccessibility, $switchAccessibilityCircle, $switchAccessibilityIcon, SwitchAccessibilityLabel(), $switchAccessibilityLine, $switchDetail, $switchInner() (+3 more)
+### Community 13 - "ReactotronConfig.ts"
+Cohesion: 0.18
+Nodes (5): Console, reactotron, goBack(), navigate(), resetRoot()
 
 ### Community 14 - "AutoImage.tsx"
 Cohesion: 0.67
 Nodes (3): AutoImage(), AutoImageProps, useAutoImage()
 
-### Community 16 - "ThemedStyle"
-Cohesion: 0.18
-Nodes (11): Dropdown(), $dropdownBox, DropdownProps, $label(), $menuContainer, Option, $optionItem, $optionText (+3 more)
+### Community 15 - "crashReporting.ts"
+Cohesion: 0.33
+Nodes (3): ErrorType, FATAL, HANDLED
 
-### Community 22 - "Checkbox.tsx"
-Cohesion: 0.25
-Nodes (7): $checkboxDetail, CheckboxInput(), CheckboxInputProps, $inputOuter, RadioInputProps, SwitchInputProps, BaseToggleInputProps
+### Community 16 - "SignUpScreen.tsx"
+Cohesion: 0.08
+Nodes (41): Button(), Dropdown(), $dropdownBox, DropdownProps, $label(), $menuContainer, Option, $optionItem (+33 more)
 
-### Community 23 - "Icon.tsx"
+### Community 18 - "ref_react"
+Cohesion: 0.36
+Nodes (5): getActiveRouteName(), navigationRestoredDefaultState(), Storage, useNavigationPersistence(), useIsMounted()
+
+### Community 20 - "loadModel"
 Cohesion: 0.25
-Nodes (7): BaseIconProps, Icon(), IconProps, iconRegistry, $imageStyleBase, PressableIcon(), PressableIconProps
+Nodes (3): bundleResourceIO, decodeJpeg, loadModel()
+
+### Community 22 - "config/index.ts"
+Cohesion: 0.29
+Nodes (4): BaseConfig, ConfigBaseProps, PersistNavigationConfig, Config
 
 ## Knowledge Gaps
-- **146 isolated node(s):** `NAVIGATION_PERSISTENCE_KEY`, `prefix`, `config`, `AutoImageProps`, `Presets` (+141 more)
-  These have ≤1 connection - possible missing edges or undocumented components.
-- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2 isolated node(s):** `FATAL`, `HANDLED`
+  These have ≤1 connection - possible missing edges. (Counts symbols only; 211 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `useAppTheme()` connect `useAppTheme` to `context.tsx`, `Toggle.tsx`, `Text.tsx`, `SignUpScreen.tsx`, `HomeScreen.tsx`, `AppNavigator.tsx`, `Header.tsx`, `PetSelectScreen.tsx`, `database.ts`, `ListItem.tsx`, `ErrorDetails.tsx`, `Switch.tsx`, `ThemedStyle`, `Checkbox.tsx`, `Icon.tsx`?**
-  _High betweenness centrality (0.148) - this node is a cross-community bridge._
-- **Why does `ThemedStyle` connect `ThemedStyle` to `context.tsx`, `Toggle.tsx`, `Text.tsx`, `useAppTheme`, `SignUpScreen.tsx`, `HomeScreen.tsx`, `Header.tsx`, `PetSelectScreen.tsx`, `database.ts`, `ListItem.tsx`, `ErrorDetails.tsx`, `Switch.tsx`?**
-  _High betweenness centrality (0.027) - this node is a cross-community bridge._
-- **Why does `ErrorBoundary` connect `ErrorDetails.tsx` to `AppNavigator.tsx`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Are the 12 inferred relationships involving `HomeScreen()` (e.g. with `$actions()` and `$card()`) actually correct?**
-  _`HomeScreen()` has 12 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `NAVIGATION_PERSISTENCE_KEY`, `prefix`, `config` to the rest of the system?**
-  _146 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `useAppTheme()` connect `useAppTheme` to `context.tsx`, `Text.tsx`, `ScanBottleScreen.tsx`, `LoginScreen.tsx`, `PetSelectScreen.tsx`, `Header.tsx`, `LeaderboardScreen.tsx`, `HomeScreen.tsx`, `AppNavigator.tsx`, `ErrorDetails.tsx`, `SignUpScreen.tsx`?**
+  _High betweenness centrality (0.098) - this node is a cross-community bridge._
+- **Are the 8 inferred relationships involving `ScanBottleScreen()` (e.g. with `$bigNumber()` and `$cameraOverlay()`) actually correct?**
+  _`ScanBottleScreen()` has 8 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `FATAL`, `HANDLED` to the rest of the system?**
+  _2 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `context.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.06641604010025062 - nodes in this community are weakly interconnected._
-- **Should `Text.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.06289308176100629 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.058469945355191254 - nodes in this community are weakly interconnected._
+- **Why does `Text` connect `ScanBottleScreen.tsx` to `context.tsx`, `useAppTheme`, `Text.tsx`, `LoginScreen.tsx`, `PetSelectScreen.tsx`, `Header.tsx`, `LeaderboardScreen.tsx`, `HomeScreen.tsx`, `ErrorDetails.tsx`, `SignUpScreen.tsx`?**
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **Should `useAppTheme` be split into smaller, more focused modules?**
+  _Cohesion score 0.057971014492753624 - nodes in this community are weakly interconnected._
+- **Why does `ScanBottleScreen()` connect `ScanBottleScreen.tsx` to `useAppTheme`, `PetSelectScreen.tsx`, `HomeScreen.tsx`, `AppNavigator.tsx`, `SignUpScreen.tsx`?**
+  _High betweenness centrality (0.025) - this node is a cross-community bridge._
