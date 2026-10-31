@@ -10,7 +10,6 @@
 import { FC, ReactNode, useEffect, useRef, useState } from "react"
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ImageStyle,
   Pressable,
@@ -24,13 +23,16 @@ import * as ImagePicker from "expo-image-picker"
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import { Switch } from "@/components/Toggle/Switch"
 import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import { loadPhotoSharing, makeThumbnail, savePhotoSharing } from "@/services/drinkPhotos"
 import { databaseService, MAX_ENTRY_ML, type EstimateSource } from "@/services/firebase/database"
 import { analyzeBottle, type BottleReading } from "@/services/vision/analyzeBottle"
 import { clamp, consumedVolume, MAX_BOTTLE_ML, type ScanPhase } from "@/services/vision/estimate"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { notify } from "@/utils/confirm"
 import { xpForWater } from "@/utils/petEvolution"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
@@ -61,6 +63,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   const [isBusy, setIsBusy] = useState(false)
   const [before, setBefore] = useState<Reading | null>(null)
   const [after, setAfter] = useState<Reading | null>(null)
+  const [sharePhotos, setSharePhotos] = useState(loadPhotoSharing)
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) requestPermission()
@@ -82,7 +85,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
       )
       setCurrent({ ...reading, imageUri: uri, adjusted: false })
     } catch (e: any) {
-      Alert.alert("Couldn't read that photo", e?.message ?? "Please try another photo.")
+      notify("Couldn't read that photo", e?.message ?? "Please try another photo.")
       setCapturing(true)
     } finally {
       setIsBusy(false)
@@ -94,7 +97,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 })
       if (photo?.uri) await handleImage(photo.uri)
     } catch (e: any) {
-      Alert.alert("Camera error", e?.message ?? "Couldn't take a photo.")
+      notify("Camera error", e?.message ?? "Couldn't take a photo.")
     }
   }
 
@@ -138,7 +141,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
             : before.source === "manual" || after.source === "manual"
               ? "manual"
               : "on-device"
-      await databaseService.logHydration({
+      const logged = await databaseService.logHydration({
         profile,
         amount: loggedAmount,
         beforeVolume: before.waterVolume,
@@ -146,16 +149,36 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
         bottleVolume: before.bottleVolume,
         source,
       })
+      let photoNote = ""
+      if (sharePhotos) {
+        // The drink is already logged; a failed photo upload only loses the proof
+        try {
+          const [b, a] = await Promise.all([
+            makeThumbnail(before.imageUri),
+            makeThumbnail(after.imageUri),
+          ])
+          await databaseService.saveDrinkPhotos({
+            userId: profile.uid,
+            entryId: logged.entryId,
+            amount: loggedAmount,
+            dateKey: logged.dateKey,
+            before: b,
+            after: a,
+          })
+        } catch (e: any) {
+          photoNote = ` Photos weren't shared: ${e?.message ?? "upload failed"}.`
+        }
+      }
       navigation.goBack()
-      Alert.alert(
+      notify(
         "Logged! 💧",
-        pet
+        (pet
           ? `${loggedAmount} ml. ${pet.name} gained ${xpForWater(loggedAmount)} XP.`
-          : `${loggedAmount} ml.`,
+          : `${loggedAmount} ml.`) + photoNote,
       )
     } catch (e: any) {
       setIsBusy(false)
-      Alert.alert("Couldn't log drink", e?.message ?? "Please try again.")
+      notify("Couldn't log drink", e?.message ?? "Please try again.")
     }
   }
 
@@ -253,6 +276,17 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
             style={{ color: theme.colors.error }}
           />
         )}
+        <Switch
+          label="Share photos with friends"
+          helper="Your friends can see these two photos on your profile."
+          value={sharePhotos}
+          onValueChange={(v) => {
+            setSharePhotos(v)
+            savePhotoSharing(v)
+          }}
+          labelPosition="left"
+          editable={!isBusy}
+        />
         <Button
           text={isBusy ? "Saving…" : `Log ${loggedAmount} ml`}
           preset="reversed"

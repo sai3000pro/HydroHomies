@@ -25,7 +25,7 @@ interface StatsScreenProps extends AppStackScreenProps<"Stats"> {}
 
 const CHART_HEIGHT = 120
 
-const litres = (ml: number) => `${(ml / 1000).toFixed(1)} L`
+const litres = (ml: number) => `${(ml / 1000).toFixed(2)} L`
 const weekday = (key: string) => fromDateKey(key).toLocaleDateString([], { weekday: "short" })
 
 export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
@@ -175,7 +175,8 @@ const StatTile: FC<{ emoji: string; value: string; label: string }> = ({ emoji, 
 const DayBar: FC<{ day: DayStat; max: number; isToday: boolean }> = ({ day, max, isToday }) => {
   const { themed, theme } = useAppTheme()
   const { palette } = theme.colors
-  const height = Math.max(2, (day.totalMl / max) * CHART_HEIGHT)
+  // Empty days get no bar; any water gets at least a visible sliver
+  const height = day.totalMl > 0 ? Math.max(4, (day.totalMl / max) * CHART_HEIGHT) : 0
   return (
     <View
       style={$barColumn}

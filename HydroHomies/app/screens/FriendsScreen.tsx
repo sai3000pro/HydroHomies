@@ -1,13 +1,5 @@
 import { FC, useEffect, useRef, useState } from "react"
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  Share,
-  TextStyle,
-  View,
-  ViewStyle,
-} from "react-native"
+import { ActivityIndicator, Pressable, Share, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -23,6 +15,7 @@ import {
 } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { confirmAction } from "@/utils/confirm"
 import { useFriends } from "@/utils/useFriends"
 
 interface FriendsScreenProps extends AppStackScreenProps<"Friends"> {}
@@ -67,18 +60,16 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
     }
   }
 
-  function confirmRemove(friend: Friend) {
-    Alert.alert("Remove friend?", `${friend.displayName} will be removed from your friends.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () =>
-          databaseService
-            .removeFriend(profile.uid, friend.friendId)
-            .catch((e) => setMessage({ text: e?.message ?? "Couldn't remove.", isError: true })),
-      },
-    ])
+  async function confirmRemove(friend: Friend) {
+    const ok = await confirmAction(
+      "Remove friend?",
+      `${friend.displayName} will be removed from your friends.`,
+      "Remove",
+    )
+    if (!ok) return
+    databaseService
+      .removeFriend(profile.uid, friend.friendId)
+      .catch((e) => setMessage({ text: e?.message ?? "Couldn't remove.", isError: true }))
   }
 
   const shareCode = () =>

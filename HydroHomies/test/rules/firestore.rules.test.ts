@@ -75,7 +75,9 @@ function logDrink(uid: string, amount: number) {
 
 beforeAll(async () => {
   env = await initializeTestEnvironment({
-    projectId: "demo-hydrohype",
+    // Separate from the demo-hydrohype project `npm run emulators` uses, so clearing test data
+    // never wipes a manual testing session running against the same emulator
+    projectId: "demo-hydrohype-rules",
     firestore: { rules: readFileSync(resolve(__dirname, "../../firestore.rules"), "utf8") },
   })
 })
@@ -522,3 +524,95 @@ describe("history and pet health on summaries", () => {
 function dailySummaryPath(uid: string) {
   return `dailySummaries/${dailySummaryId(uid, toDateKey())}`
 }
+
+describe("drink photos", () => {
+  const thumb = "data:image/jpeg;base64,/9j/AAAA"
+
+  async function aliceLogsWithPhotos() {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const logged = await logDrink("alice", 300)
+    await databaseService.saveDrinkPhotos({
+      userId: "alice",
+      entryId: logged.entryId,
+      amount: 300,
+      dateKey: logged.dateKey,
+      before: thumb,
+      after: thumb,
+    })
+    return logged.entryId
+  }
+
+  function firstPhotos(userId: string) {
+    return new Promise<unknown[]>((res, rej) => {
+      const unsub = databaseService.subscribeToDrinkPhotos(
+        userId,
+        (p) => {
+          unsub()
+          res(p)
+        },
+        (e) => {
+          unsub()
+          rej(e)
+        },
+      )
+    })
+  }
+
+  it("lets the owner and their friends see photos, but not strangers", async () => {
+    await aliceLogsWithPhotos()
+    await seed("users/alice/friends/bob", { friendId: "bob", displayName: "bob" })
+
+    actAs("alice")
+    expect(await firstPhotos("alice")).toHaveLength(1)
+    actAs("bob")
+    expect(await firstPhotos("alice")).toHaveLength(1)
+    actAs("mallory")
+    await expect(firstPhotos("alice")).rejects.toMatchObject({ code: "permission-denied" })
+  })
+
+  it("only allows photos for your own logged drinks", async () => {
+    const entryId = await aliceLogsWithPhotos()
+    const db = actAs("mallory")
+    // Not Mallory's drink
+    await assertFails(
+      setDoc(doc(db, "drinkPhotos", "other-" + entryId), {
+        userId: "mallory",
+        amount: 300,
+        dateKey: toDateKey(),
+        before: thumb,
+        after: thumb,
+      }),
+    )
+    // No such drink
+    await assertFails(
+      setDoc(doc(db, "drinkPhotos", "nope"), {
+        userId: "mallory",
+        amount: 300,
+        dateKey: toDateKey(),
+        before: thumb,
+        after: thumb,
+      }),
+    )
+  })
+
+  it("rejects non-JPEG data and edits, and lets only the owner delete", async () => {
+    const entryId = await aliceLogsWithPhotos()
+    const db = actAs("alice")
+    await assertFails(updateDoc(doc(db, "drinkPhotos", entryId), { before: thumb + "A" }))
+    const second = await logDrink("alice", 200)
+    await assertFails(
+      setDoc(doc(db, "drinkPhotos", second.entryId), {
+        userId: "alice",
+        amount: 200,
+        dateKey: second.dateKey,
+        before: "data:text/html;base64,PHNjcmlwdD4=",
+        after: thumb,
+      }),
+    )
+    actAs("mallory")
+    await assertFails(databaseService.deleteDrinkPhotos(entryId))
+    actAs("alice")
+    await assertSucceeds(databaseService.deleteDrinkPhotos(entryId))
+  })
+})

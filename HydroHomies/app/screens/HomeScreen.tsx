@@ -128,7 +128,23 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           <Button text="📊 Stats" style={$flex} onPress={() => navigation.navigate("Stats")} />
           <Button text="👥 Friends" style={$flex} onPress={() => navigation.navigate("Friends")} />
         </View>
-        <Button text="⏰ Reminders" onPress={() => navigation.navigate("Reminders")} />
+        <View style={themed($actionRow)}>
+          <Button
+            text="📷 My profile"
+            style={$flex}
+            onPress={() =>
+              navigation.navigate("FriendPet", {
+                userId: profile.uid,
+                displayName: profile.username,
+              })
+            }
+          />
+          <Button
+            text="⏰ Reminders"
+            style={$flex}
+            onPress={() => navigation.navigate("Reminders")}
+          />
+        </View>
       </View>
 
       {!!loadError && (

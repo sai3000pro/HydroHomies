@@ -10,6 +10,7 @@
  */
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -90,6 +91,17 @@ export interface Friend {
   friendId: string
   displayName: string
   addedAt: Date | null
+}
+
+/** Before/after thumbnails of one drink. Readable by the owner and their friends. */
+export interface DrinkPhotos {
+  entryId: string
+  userId: string
+  amount: number
+  dateKey: string
+  before: string // data:image/jpeg;base64,...
+  after: string
+  createdAt: Date | null
 }
 
 /** Letters and digits that can't be confused with each other (no O/0, I/1) */
@@ -295,7 +307,7 @@ export const databaseService = {
     afterVolume: number
     bottleVolume: number | null
     source: EstimateSource
-  }): Promise<{ entryId: string; totalToday: number }> {
+  }): Promise<{ entryId: string; totalToday: number; dateKey: string }> {
     const { profile } = params
     // Stored as whole ml, so validate the rounded value (the rules reject 0)
     const amount = Math.round(params.amount)
@@ -357,7 +369,7 @@ export const databaseService = {
         updatedAt: serverTimestamp(),
       })
 
-      return { entryId: entryRef.id, totalToday: totalMl }
+      return { entryId: entryRef.id, totalToday: totalMl, dateKey }
     })
   },
 
@@ -470,6 +482,68 @@ export const databaseService = {
       ),
     )
     return snap.docs.map((d) => parseSummary(d.data()))
+  },
+
+  // ---------- Drink photos ----------
+
+  /** Saves the thumbnails for a drink that was just logged with logHydration. */
+  async saveDrinkPhotos(p: {
+    userId: string
+    entryId: string
+    amount: number
+    dateKey: string
+    before: string
+    after: string
+  }) {
+    await setDoc(doc(db, "drinkPhotos", p.entryId), {
+      userId: p.userId,
+      amount: Math.round(p.amount),
+      dateKey: p.dateKey,
+      before: p.before,
+      after: p.after,
+      createdAt: serverTimestamp(),
+    })
+  },
+
+  async deleteDrinkPhotos(entryId: string) {
+    await deleteDoc(doc(db, "drinkPhotos", entryId))
+  },
+
+  /**
+   * A user's latest drink photos, newest first. Fails with permission-denied
+   * unless you are that user or their friend.
+   * Requires the (userId ASC, createdAt DESC) index in firestore.indexes.json.
+   */
+  subscribeToDrinkPhotos(
+    userId: string,
+    cb: (photos: DrinkPhotos[]) => void,
+    onError?: (e: Error & { code?: string }) => void,
+    limitCount = 20,
+  ): Unsubscribe {
+    return onSnapshot(
+      query(
+        collection(db, "drinkPhotos"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+        limit(limitCount),
+      ),
+      (snap) =>
+        cb(
+          snap.docs.map((d) => {
+            const data = d.data()
+            return {
+              entryId: d.id,
+              userId: data.userId,
+              amount: num(data.amount),
+              dateKey: data.dateKey ?? "",
+              before: data.before,
+              after: data.after,
+              createdAt: toDate(data.createdAt),
+            }
+          }),
+        ),
+      onError,
+    )
   },
 
   // ---------- Friends ----------

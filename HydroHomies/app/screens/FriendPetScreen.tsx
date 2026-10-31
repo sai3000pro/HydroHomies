@@ -2,9 +2,11 @@ import { FC, useEffect, useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 
 import { Button } from "@/components/Button"
+import { DrinkPhotoGallery } from "@/components/DrinkPhotoGallery"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { databaseService, type DailySummary, type PetState } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
@@ -17,6 +19,8 @@ interface FriendPetScreenProps extends AppStackScreenProps<"FriendPet"> {}
 export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route }) => {
   const { themed, theme } = useAppTheme()
   const { userId, displayName } = route.params
+  const { profile } = useSignedInUser()
+  const isMe = userId === profile.uid
 
   const [pet, setPet] = useState<PetState | null | undefined>(undefined)
   const [summary, setSummary] = useState<DailySummary | null>(null)
@@ -41,7 +45,11 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
       safeAreaEdges={["top", "bottom"]}
     >
       <View style={themed($header)}>
-        <Text preset="heading" text={`${displayName}'s pet`} style={$flex} />
+        <Text
+          preset="heading"
+          text={isMe ? "Your profile" : `${displayName}'s pet`}
+          style={$flex}
+        />
         <Button text="Back" onPress={() => navigation.goBack()} />
       </View>
 
@@ -70,6 +78,8 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
           <Text style={themed($dim)} text="No drinks logged yet today." />
         )}
       </View>
+
+      <DrinkPhotoGallery userId={userId} displayName={displayName} isMe={isMe} />
     </Screen>
   )
 }

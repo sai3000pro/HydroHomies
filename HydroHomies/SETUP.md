@@ -45,11 +45,14 @@ The app is wired to the `hydrohype-9fa73` project (see `.firebaserc`). To use yo
 | `dailySummaries` | `{uid}_{YYYY-MM-DD}` | any signed-in user | day total, goal, display name, pet summary incl. health (drives the leaderboard and stats) |
 | `friendCodes` | 6-character code | signed-in users, by exact code only | the code's owner and display name |
 | `users/{uid}/friends` | friend's uid | owner | friend's display name. Adding a friend writes both users' lists |
+| `drinkPhotos` | the drink's entry id | owner and their friends | before/after JPEG thumbnails (data URIs, ~30-60 KB per pair) |
 | `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting (only used by the Cloud Function) |
 
 Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`).
 
 **Friends.** Each user gets a friend code the first time they open Friends. Entering someone's code adds you to each other's lists. The rules only allow that write if the code really belongs to the other user, so nobody can add themselves without the code. Either friend can remove the friendship. The leaderboard has a Friends tab (you plus your friends) and an Everyone tab.
+
+**Drink photos.** When "Share photos with friends" is on (the default, remembered per device), logging a drink also saves small thumbnails of the before and after photos. They show on your profile (Home → My profile) and on the profile your friends see, so they can call you out if the bottle didn't really go down. You can delete any pair. Photos live in Firestore rather than Cloud Storage, because Storage needs the Blaze plan. The free Firestore quota is 1 GiB, which is roughly 20,000 drinks with photos.
 
 **Stats and achievements** are computed on the device from the last 60 days of `dailySummaries` and the pet's XP. Nothing extra is stored. The history query needs the `(userId, dateKey)` index in `firestore.indexes.json`, so run `npm run deploy:firestore` after pulling this.
 
@@ -66,6 +69,17 @@ npm run test:rules
 ```
 
 The emulator needs **Java 21+** on `PATH`. `npm test` skips these tests because they need the emulator.
+
+### Trying the app without touching the real project
+
+`npm run emulators` starts local Auth and Firestore emulators (project `demo-hydrohype`). Start the app with `EXPO_PUBLIC_USE_FIREBASE_EMULATORS=1` and it signs up, logs drinks and adds friends against those instead of the real database:
+
+```powershell
+npm run emulators                                         # terminal 1 (Java 21+)
+$env:EXPO_PUBLIC_USE_FIREBASE_EMULATORS="1"; npm run web  # terminal 2
+```
+
+For a phone or Android emulator, also set `EXPO_PUBLIC_FIREBASE_EMULATOR_HOST` to your PC's LAN IP (or `10.0.2.2` for the Android emulator). Data disappears when the emulators stop.
 
 ## 3. AI bottle estimate
 

@@ -101,6 +101,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // drinkPhotos/{entryId}: before/after thumbnails of one drink (JPEG data URIs).
+    // Visible to the owner and their friends, so friends can check the drink was real.
+    match /drinkPhotos/{entryId} {
+      function isFriendOf(owner) {
+        return exists(/databases/$(database)/documents/users/$(owner)/friends/$(request.auth.uid));
+      }
+      function isThumb(v) { return v is string && v.size() < 400000 && v.matches('^data:image/jpeg;base64,.*'); }
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || isFriendOf(resource.data.userId));
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && isMl(request.resource.data.amount)
+        && request.resource.data.dateKey is string
+        && isThumb(request.resource.data.before)
+        && isThumb(request.resource.data.after)
+        // The photos belong to a drink this user logged
+        && get(/databases/$(database)/documents/hydrationEntries/$(entryId)).data.userId == request.auth.uid;
+      // You can take your photos down, but not edit them
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
     // aiUsage/{uid}_{day}: written only by the estimateBottle function (Admin SDK).
     match /{document=**} {
       allow read, write: if false;

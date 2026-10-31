@@ -18,7 +18,15 @@ Setup and architecture: [HydroHomies/SETUP.md](./HydroHomies/SETUP.md). Code map
 - **Stats.** Last 7 days as a bar chart against the goal, weekly total and average, days on goal, best day, current and best streak.
 - **Achievements.** 12 achievements on the Stats screen (first drink, goal, 3/7/30-day streaks, 10 L and 100 L lifetime, pet level 5/15/30, 1 and 5 friends), with progress bars. Computed on the device; nothing stored.
 - **Reminders.** Local notifications every 1-4 hours within a chosen time window, titled with the pet's name. Today's remaining reminders are dropped once the goal is reached. Cleared on logout.
-- **Rules tests.** `npm run test:rules` runs the real `databaseService` against the Firestore emulator: 35 tests over profiles, pets, migration, drinks, friends, history and both leaderboards.
+- **Drink photo gallery.** Before/after thumbnails of each drink show on your profile (Home → My profile) for you and your friends only, so friends can call out faked drinks. Optional per drink, deletable. Stored in Firestore because Cloud Storage needs Blaze.
+- **Local testing.** `npm run emulators` plus `EXPO_PUBLIC_USE_FIREBASE_EMULATORS=1` runs the whole app against local emulators (see SETUP.md).
+- **Rules tests.** `npm run test:rules` runs the real `databaseService` against the Firestore emulator: 38 tests over profiles, pets, migration, drinks, friends, drink photos, history and both leaderboards.
+
+## Verified in the browser (Expo web against the emulators)
+
+Two accounts, Alice and Bob: sign-up → pet → log drinks (gallery photos, manual amounts) → Home totals and XP → Stats (chart, numbers, First Sip unlocked) → own profile gallery → Bob adds Alice by code → Bob sees Alice's photos and the Friends/Everyone leaderboards → Bob removes Alice → Alice's photos are then hidden from Bob → deleting your own photos → logout. Found and fixed along the way: confirm dialogs and alerts did nothing on web (`Alert.alert` is a no-op there), and Stats showed 150 ml as "0.1 L".
+
+Not verifiable on web: reminders (web shows a "phones only" message), the on-device model, and the native camera. Those still need a phone.
 
 ## Current state (all passing)
 
@@ -29,7 +37,7 @@ Run these from `HydroHomies/`:
 | `npm run compile` | 0 errors |
 | `npm run lint:check` | clean |
 | `npm test` | 7 suites, 32 tests pass |
-| `npm run test:rules` | 35 tests pass in the emulator |
+| `npm run test:rules` | 38 tests pass in the emulator |
 | `npx expo export --platform android` | bundles |
 
 `npm run test:rules` needs **Java 21+**. The system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `jdk-21.0.13+9-jre\bin` folder on `PATH` in that terminal first.
@@ -37,7 +45,7 @@ Run these from `HydroHomies/`:
 ## Next steps
 
 1. **Add the OpenRouter key.** Copy `HydroHomies/.env.example` to `HydroHomies/.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. Set a monthly spending limit on the key in OpenRouter, because it's in the app bundle and there's no per-user rate limit without the Cloud Function.
-2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. The new rules (friends, friend codes) and the new `(userId, dateKey)` history index are needed by this version. The Stats screen fails until the index finishes building.
+2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. The new rules (friends, friend codes, drink photos) and the new history and photo indexes are needed by this version. Stats and the photo gallery fail until the indexes finish building.
 3. **Rebuild the dev build and test on a device** (`npm run android`). `expo-notifications` is a new native module. Check: sign-up → pet → scan → leaderboard, adding a friend from a second account, the Stats screen, a reminder arriving, the camera, legacy-pet migration, and whether `bundleResourceIO` loads the model on device.
 4. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
 
