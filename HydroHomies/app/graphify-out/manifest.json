@@ -30,9 +30,9 @@
     "semantic_hash": ""
   },
   "components/Dropdown.tsx": {
-    "mtime": 1793462243.8844337,
-    "seen": 1793465733.4516559,
-    "ast_hash": "bad9c4a95f3fb29aa001aa3241e94c96",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "d1ef65dc095f1d86a2158fa782eb0388",
     "semantic_hash": ""
   },
   "components/EmptyState.tsx": {
@@ -84,9 +84,9 @@
     "semantic_hash": ""
   },
   "components/TextField.tsx": {
-    "mtime": 1793461512.2800043,
-    "seen": 1793465733.4516559,
-    "ast_hash": "2263ffd25294cedadc2adf5544e2e03a",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "7cf716158622b307c4d70233ea5c69df",
     "semantic_hash": ""
   },
   "components/Toggle/Checkbox.tsx": {
@@ -216,15 +216,15 @@
     "semantic_hash": ""
   },
   "navigators/AppNavigator.tsx": {
-    "mtime": 1793471174.2558181,
-    "seen": 1793471469.2939777,
-    "ast_hash": "8fd1a69ac89c3cb115821c3afc489673",
+    "mtime": 1793477627.013228,
+    "seen": 1793479075.791887,
+    "ast_hash": "99c295044ae623b84c3d69dc0578b003",
     "semantic_hash": ""
   },
   "navigators/navigationTypes.ts": {
-    "mtime": 1793471174.2558181,
-    "seen": 1793471469.2939777,
-    "ast_hash": "e4ea4aff13cefec7355893af2ce42b7c",
+    "mtime": 1793477627.013228,
+    "seen": 1793479075.791887,
+    "ast_hash": "201248ab558593bd561fbb6793f00d94",
     "semantic_hash": ""
   },
   "navigators/navigationUtilities.ts": {
@@ -246,51 +246,51 @@
     "semantic_hash": ""
   },
   "screens/FriendPetScreen.tsx": {
-    "mtime": 1793462243.8964198,
-    "seen": 1793465733.4516559,
-    "ast_hash": "d8ce8da7b141455dbf3529887fccc03f",
+    "mtime": 1793476030.551365,
+    "seen": 1793479075.791887,
+    "ast_hash": "eaa624a1009c7fe6febd0e6de659f884",
     "semantic_hash": ""
   },
   "screens/HomeScreen.tsx": {
-    "mtime": 1793471174.2568178,
-    "seen": 1793471469.2939777,
-    "ast_hash": "b3d7fc44f2782696d7b52601a599eb38",
+    "mtime": 1793478409.6182323,
+    "seen": 1793479075.791887,
+    "ast_hash": "4e76710a157edf6528b4f7e05f793297",
     "semantic_hash": ""
   },
   "screens/LeaderboardScreen.tsx": {
-    "mtime": 1793471174.2568178,
-    "seen": 1793471469.2939777,
-    "ast_hash": "0279c27e20f8c84c1651961300c76b0f",
+    "mtime": 1793478409.6182323,
+    "seen": 1793479075.791887,
+    "ast_hash": "4a68392ced037dc8452d3702f3591917",
     "semantic_hash": ""
   },
   "screens/LoginScreen.tsx": {
-    "mtime": 1793462243.8974247,
-    "seen": 1793465733.4516559,
-    "ast_hash": "e5f8580291730842bf8a01d01389a26e",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "694bee7ae7ee462a99c9a71d94ebfee2",
     "semantic_hash": ""
   },
   "screens/OnboardingScreen.tsx": {
-    "mtime": 1793462243.8974247,
-    "seen": 1793465733.4516559,
-    "ast_hash": "34de538d89ccf6578a38451e23bea952",
+    "mtime": 1793476265.0702827,
+    "seen": 1793479075.791887,
+    "ast_hash": "bd7919b8023aa418f3ae1734ebcb6518",
     "semantic_hash": ""
   },
   "screens/PetSelectScreen.tsx": {
-    "mtime": 1793462243.898421,
-    "seen": 1793465733.4516559,
-    "ast_hash": "6f9cc570d39321e39554bde11bc72a8a",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "8c56b044309ed663f3e0aa826ca04b70",
     "semantic_hash": ""
   },
   "screens/ScanBottleScreen.tsx": {
-    "mtime": 1793462243.898421,
-    "seen": 1793465733.4516559,
-    "ast_hash": "659c8710c1accf2b72d3c2496fed3a65",
+    "mtime": 1793478484.9238372,
+    "seen": 1793479075.791887,
+    "ast_hash": "eedf7594ec290e62ae8f93247e2adb90",
     "semantic_hash": ""
   },
   "screens/SignUpScreen.tsx": {
-    "mtime": 1793462243.899423,
-    "seen": 1793465733.4516559,
-    "ast_hash": "1b37b103a48357ba6bce0554096d012c",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "7e1123e0c0a2a382fe5e6f06c2232350",
     "semantic_hash": ""
   },
   "services/firebase/auth.ts": {
@@ -300,15 +300,15 @@
     "semantic_hash": ""
   },
   "services/firebase/config.ts": {
-    "mtime": 1793462243.9004185,
-    "seen": 1793465733.4516559,
-    "ast_hash": "a6a860490082913c2758fdaef3a1377e",
+    "mtime": 1793474454.4879632,
+    "seen": 1793479075.791887,
+    "ast_hash": "dd57ae2778bd2b0883d28d973c2712bd",
     "semantic_hash": ""
   },
   "services/firebase/database.ts": {
-    "mtime": 1793471174.2568178,
-    "seen": 1793471469.2939777,
-    "ast_hash": "305563daf195df632cfbcffcd1d51f39",
+    "mtime": 1793477627.0142355,
+    "seen": 1793479075.791887,
+    "ast_hash": "471df4cae32e45d46a98b25ec6907a32",
     "semantic_hash": ""
   },
   "services/ml/tfjsRN.native.ts": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "components/StatsFields.tsx": {
-    "mtime": 1793462243.8854353,
-    "seen": 1793465733.4516559,
-    "ast_hash": "b981f07fefe79adbc573adda347f0a49",
+    "mtime": 1793476814.140916,
+    "seen": 1793479075.791887,
+    "ast_hash": "a5f51643106caa32d5ed94a7f0dd7196",
     "semantic_hash": ""
   },
   "services/ml/tfjsRN.ts": {
@@ -528,21 +528,21 @@
     "semantic_hash": ""
   },
   "screens/FriendsScreen.tsx": {
-    "mtime": 1793471174.2558181,
-    "seen": 1793471469.2939777,
-    "ast_hash": "6f5d4afa085336f40e9a8a476ec89570",
+    "mtime": 1793476291.187821,
+    "seen": 1793479075.791887,
+    "ast_hash": "e3e45cba90f919822b5eabd9edb816e7",
     "semantic_hash": ""
   },
   "screens/RemindersScreen.tsx": {
-    "mtime": 1793471122.7584925,
-    "seen": 1793471469.2939777,
-    "ast_hash": "8cba52487d4da8d13ce2e3bd55531f1f",
+    "mtime": 1793476030.5493634,
+    "seen": 1793479075.791887,
+    "ast_hash": "0130579783f03c641f0af0c9a0150f3b",
     "semantic_hash": ""
   },
   "screens/StatsScreen.tsx": {
-    "mtime": 1793471174.2568178,
-    "seen": 1793471469.2939777,
-    "ast_hash": "ba2f24bf6815ea55ae72a7da1f5eb6e2",
+    "mtime": 1793476592.9363701,
+    "seen": 1793479075.791887,
+    "ast_hash": "e9c31b4483804d5908957e0541e97d4a",
     "semantic_hash": ""
   },
   "services/reminders.ts": {
@@ -561,6 +561,42 @@
     "mtime": 1793470990.4738612,
     "seen": 1793471469.2939777,
     "ast_hash": "e5df2a2976bef9cb8a7ddff584eedaa1",
+    "semantic_hash": ""
+  },
+  "components/ActionTile.tsx": {
+    "mtime": 1793475969.0906408,
+    "seen": 1793479075.791887,
+    "ast_hash": "0da41c57f8815eff3a4ec4554afa6054",
+    "semantic_hash": ""
+  },
+  "components/DrinkPhotoGallery.tsx": {
+    "mtime": 1793477474.027574,
+    "seen": 1793479075.791887,
+    "ast_hash": "d1346e0c7e3fca4bc469f184416af183",
+    "semantic_hash": ""
+  },
+  "components/ScreenHeader.tsx": {
+    "mtime": 1793478458.138004,
+    "seen": 1793479075.791887,
+    "ast_hash": "0c7c22da8ed4e16218fbd20612bdb456",
+    "semantic_hash": ""
+  },
+  "screens/SettingsScreen.tsx": {
+    "mtime": 1793477513.737887,
+    "seen": 1793479075.791887,
+    "ast_hash": "6a0e1f363dd5dcf5526fd0f0a69d14ef",
+    "semantic_hash": ""
+  },
+  "services/drinkPhotos.ts": {
+    "mtime": 1793474384.8708222,
+    "seen": 1793479075.791887,
+    "ast_hash": "90863de4fbaf19a45942dc981dca26fc",
+    "semantic_hash": ""
+  },
+  "utils/confirm.ts": {
+    "mtime": 1793475184.4137437,
+    "seen": 1793479075.791887,
+    "ast_hash": "8128cd91350c3531830211391ccb2bb6",
     "semantic_hash": ""
   }
 }
