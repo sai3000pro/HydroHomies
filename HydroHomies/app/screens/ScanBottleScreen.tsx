@@ -74,6 +74,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   const { profile, pet } = useSignedInUser()
   const [permission, requestPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView>(null)
+  const logging = useRef(false)
 
   const [step, setStep] = useState<Step>("before")
   const [capturing, setCapturing] = useState(true)
@@ -82,8 +83,12 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   const [after, setAfter] = useState<Reading | null>(null)
   const [sharePhotos, setSharePhotos] = useState(loadPhotoSharing)
 
+  // Ask for the camera once on open; after that the user taps "Grant permission"
+  const askedCamera = useRef(false)
   useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) requestPermission()
+    if (askedCamera.current || !permission || permission.granted || !permission.canAskAgain) return
+    askedCamera.current = true
+    requestPermission()
   }, [permission, requestPermission])
 
   // After a browser refresh on this screen there's no Home underneath to go back to
@@ -122,11 +127,15 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   }
 
   async function pickPhoto() {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.7,
-    })
-    if (!result.canceled && result.assets[0]) await handleImage(result.assets[0].uri)
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+      })
+      if (!result.canceled && result.assets[0]) await handleImage(result.assets[0].uri)
+    } catch (e: any) {
+      notify("Couldn't open your photos", e?.message ?? "Please try again.")
+    }
   }
 
   function adjust(field: "waterVolume" | "bottleVolume", delta: number) {
@@ -150,7 +159,9 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   const loggedAmount = Math.min(consumed, MAX_ENTRY_ML)
 
   async function logDrink() {
-    if (!before || !after || loggedAmount <= 0) return
+    // A ref, not state: a fast double tap fires twice before the re-render disables the button
+    if (!before || !after || loggedAmount <= 0 || logging.current) return
+    logging.current = true
     setIsBusy(true)
     try {
       const source: EstimateSource =
@@ -192,6 +203,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
       leave()
       notify("Logged! 💧", celebration(pet, loggedAmount) + photoNote)
     } catch (e: any) {
+      logging.current = false
       setIsBusy(false)
       notify("Couldn't log drink", e?.message ?? "Please try again.")
     }

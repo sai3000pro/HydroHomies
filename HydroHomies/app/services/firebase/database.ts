@@ -9,7 +9,9 @@
  * users/{uid}/friends/{friendId}  mutual friend list (owner-only)
  */
 import {
+  arrayUnion,
   collection,
+  collectionGroup,
   deleteDoc,
   deleteField,
   doc,
@@ -23,9 +25,11 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
   writeBatch,
   type DocumentData,
+  type DocumentReference,
   type Unsubscribe,
 } from "firebase/firestore"
 
@@ -46,6 +50,8 @@ export interface UserProfile {
   stats?: StoredUserStats
   /** Code other users enter to add this user as a friend. Created on first visit to Friends. */
   friendCode?: string
+  /** Achievement ids earned so far; kept so they never lock again */
+  achievements: string[]
 }
 
 export interface PetState {
@@ -164,6 +170,9 @@ export function parseUserProfile(uid: string, data: DocumentData): UserProfile {
     username: typeof data.username === "string" ? data.username : (data.displayName ?? ""),
     stats,
     friendCode: typeof data.friendCode === "string" ? data.friendCode : undefined,
+    achievements: Array.isArray(data.achievements)
+      ? data.achievements.filter((a: unknown): a is string => typeof a === "string")
+      : [],
   }
 }
 
@@ -234,6 +243,12 @@ export const databaseService = {
       },
       { merge: true },
     )
+  },
+
+  /** Records newly earned achievements on the profile (they then stay unlocked) */
+  async saveAchievements(userId: string, ids: string[]) {
+    if (ids.length === 0) return
+    await setDoc(doc(db, "users", userId), { achievements: arrayUnion(...ids) }, { merge: true })
   },
 
   subscribeToProfile(
@@ -363,6 +378,8 @@ export const databaseService = {
           health: fed.health,
           lastFed: serverTimestamp(),
           ownerName: profile.username,
+          // Lets the rules check the XP change against this drink
+          lastEntryId: entryRef.id,
           updatedAt: serverTimestamp(),
         })
       }
@@ -371,7 +388,7 @@ export const databaseService = {
       tx.set(summaryRef, {
         userId: uid,
         dateKey,
-        displayName: profile.username || "Anonymous",
+        displayName: (profile.username || "Anonymous").slice(0, 24),
         totalMl,
         goalMl,
         entryCount: (prev?.entryCount ?? 0) + 1,
@@ -379,6 +396,7 @@ export const databaseService = {
         petSpecies: pet?.species ?? null,
         petExperience,
         petHealth,
+        lastEntryId: entryRef.id,
         updatedAt: serverTimestamp(),
       })
 
@@ -388,15 +406,25 @@ export const databaseService = {
 
   /**
    * Undoes a logged drink (within UNDO_WINDOW_MS): removes the entry and its photos,
-   * subtracts it from that day's summary, and takes back the XP it earned.
+   * subtracts it from that day's summary, and takes back the XP and health it gave.
    */
   async deleteDrink(profile: UserProfile, entryId: string) {
     const uid = profile.uid
     const entryRef = doc(db, "hydrationEntries", entryId)
     const photosRef = doc(db, "drinkPhotos", entryId)
     const petRef = doc(db, "pets", uid)
+    const goalMl = profile.stats?.dailyWaterGoal ?? 2500
 
-    // Reactions live in a subcollection a transaction can't query; clear them first
+    // Check before touching anything, so a refused undo never loses the photos
+    const first = await getDoc(entryRef)
+    if (!first.exists()) throw new Error("That drink was already deleted.")
+    const checked = parseEntry(entryId, first.data())
+    if (checked.userId !== uid) throw new Error("That isn't your drink.")
+    if (checked.timestamp && Date.now() - checked.timestamp.getTime() > UNDO_WINDOW_MS) {
+      throw new Error("Drinks can only be deleted within 24 hours.")
+    }
+
+    // Reactions live in a subcollection a transaction can't query; clear photos first
     const photosSnap = await getDoc(photosRef).catch(() => null)
     if (photosSnap?.exists()) await databaseService.deleteDrinkPhotos(entryId)
 
@@ -404,30 +432,35 @@ export const databaseService = {
       const entrySnap = await tx.get(entryRef)
       if (!entrySnap.exists()) throw new Error("That drink was already deleted.")
       const entry = parseEntry(entryId, entrySnap.data())
-      if (entry.userId !== uid) throw new Error("That isn't your drink.")
-      if (entry.timestamp && Date.now() - entry.timestamp.getTime() > UNDO_WINDOW_MS) {
-        throw new Error("Drinks can only be deleted within 24 hours.")
-      }
-
       const summaryRef = doc(db, "dailySummaries", dailySummaryId(uid, entry.dateKey))
       const summarySnap = await tx.get(summaryRef)
       const petSnap = await tx.get(petRef)
+      const xpBack = xpForWater(entry.amount)
+
+      let newXp = 0
+      let newHealth = 100
+      if (petSnap.exists()) {
+        const pet = parsePet(uid, petSnap.data())
+        newXp = Math.max(0, Math.round(pet.experience) - xpBack)
+        // Take back the health boost the drink gave (same formula as feedPet)
+        newHealth = Math.max(0, Math.round(pet.health - (entry.amount / goalMl) * 100))
+        tx.update(petRef, {
+          experience: newXp,
+          health: newHealth,
+          lastEntryId: entryId,
+          updatedAt: serverTimestamp(),
+        })
+      }
 
       tx.delete(entryRef)
       if (summarySnap.exists()) {
         const s = parseSummary(summarySnap.data())
-        const xpBack = xpForWater(entry.amount)
         tx.update(summaryRef, {
           totalMl: Math.max(0, s.totalMl - entry.amount),
           entryCount: Math.max(0, s.entryCount - 1),
-          petExperience: Math.max(0, s.petExperience - xpBack),
-          updatedAt: serverTimestamp(),
-        })
-      }
-      if (petSnap.exists()) {
-        const pet = parsePet(uid, petSnap.data())
-        tx.update(petRef, {
-          experience: Math.max(0, Math.round(pet.experience) - xpForWater(entry.amount)),
+          petExperience: newXp,
+          petHealth: petSnap.exists() ? newHealth : s.petHealth,
+          lastEntryId: entryId,
           updatedAt: serverTimestamp(),
         })
       }
@@ -450,12 +483,13 @@ export const databaseService = {
     userId: string,
     cb: (entries: HydrationEntry[]) => void,
     onError?: (e: Error) => void,
+    dateKey: string = toDateKey(),
   ): Unsubscribe {
     // Two equality filters need no composite index; sort client-side.
     const q = query(
       collection(db, "hydrationEntries"),
       where("userId", "==", userId),
-      where("dateKey", "==", toDateKey()),
+      where("dateKey", "==", dateKey),
     )
     return onSnapshot(
       q,
@@ -470,13 +504,36 @@ export const databaseService = {
     )
   },
 
+  /**
+   * Your latest drinks across days, newest first.
+   * Requires the (userId ASC, timestamp DESC) index in firestore.indexes.json.
+   */
+  subscribeToRecentEntries(
+    userId: string,
+    cb: (entries: HydrationEntry[]) => void,
+    onError?: (e: Error) => void,
+    limitCount = 30,
+  ): Unsubscribe {
+    return onSnapshot(
+      query(
+        collection(db, "hydrationEntries"),
+        where("userId", "==", userId),
+        orderBy("timestamp", "desc"),
+        limit(limitCount),
+      ),
+      (snap) => cb(snap.docs.map((d) => parseEntry(d.id, d.data()))),
+      onError,
+    )
+  },
+
   subscribeToDailySummary(
     userId: string,
     cb: (s: DailySummary | null) => void,
     onError?: (e: Error) => void,
+    dateKey: string = toDateKey(),
   ): Unsubscribe {
     return onSnapshot(
-      doc(db, "dailySummaries", dailySummaryId(userId)),
+      doc(db, "dailySummaries", dailySummaryId(userId, dateKey)),
       (snap) => cb(snap.exists() ? parseSummary(snap.data()) : null),
       onError,
     )
@@ -489,10 +546,11 @@ export const databaseService = {
     cb: (rows: DailySummary[]) => void,
     onError?: (e: Error) => void,
     limitCount = 50,
+    dateKey: string = toDateKey(),
   ): Unsubscribe {
     const q = query(
       collection(db, "dailySummaries"),
-      where("dateKey", "==", toDateKey()),
+      where("dateKey", "==", dateKey),
       orderBy("totalMl", "desc"),
       limit(limitCount),
     )
@@ -512,13 +570,13 @@ export const databaseService = {
     userIds: string[],
     cb: (rows: DailySummary[]) => void,
     onError?: (e: Error) => void,
+    dateKey: string = toDateKey(),
   ): Unsubscribe {
     const ids = [...new Set(userIds)]
     if (ids.length === 0) {
       cb([])
       return () => {}
     }
-    const dateKey = toDateKey()
     const chunks: string[][] = []
     for (let i = 0; i < ids.length; i += IN_QUERY_LIMIT)
       chunks.push(ids.slice(i, i + IN_QUERY_LIMIT))
@@ -549,8 +607,12 @@ export const databaseService = {
    * The user's daily summaries for the last `days` days (including today), oldest first.
    * Requires the (userId ASC, dateKey ASC) index in firestore.indexes.json.
    */
-  async getSummaryHistory(userId: string, days: number): Promise<DailySummary[]> {
-    const from = shiftDateKey(toDateKey(), -(days - 1))
+  async getSummaryHistory(
+    userId: string,
+    days: number,
+    today: string = toDateKey(),
+  ): Promise<DailySummary[]> {
+    const from = shiftDateKey(today, -(days - 1))
     const snap = await getDocs(
       query(
         collection(db, "dailySummaries"),
@@ -716,7 +778,13 @@ export const databaseService = {
       code,
       addedAt: serverTimestamp(),
     })
-    await batch.commit()
+    try {
+      await batch.commit()
+    } catch (e: any) {
+      // They may have added you at the same moment; then you're already friends
+      if ((await getDoc(mine).catch(() => null))?.exists()) return displayName
+      throw e
+    }
     return displayName
   },
 
@@ -726,6 +794,100 @@ export const databaseService = {
     batch.delete(doc(db, "users", userId, "friends", friendId))
     batch.delete(doc(db, "users", friendId, "friends", userId))
     await batch.commit()
+  },
+
+  /**
+   * Replaces your friend code. Existing friends stay; anyone holding the old code can no
+   * longer use it to add you.
+   */
+  async regenerateFriendCode(profile: UserProfile): Promise<string> {
+    const old = profile.friendCode
+    const code = await databaseService.ensureFriendCode({ ...profile, friendCode: undefined })
+    if (old) await deleteDoc(doc(db, "friendCodes", old)).catch(() => {})
+    return code
+  },
+
+  /**
+   * Carries a new username to the places that keep a copy: your friend code, each
+   * friend's list, and today's leaderboard row. Past days keep the old name.
+   */
+  async propagateDisplayName(profile: UserProfile, name: string, today: string) {
+    const display = name.slice(0, 24)
+    const jobs: Promise<unknown>[] = []
+    if (profile.friendCode) {
+      jobs.push(updateDoc(doc(db, "friendCodes", profile.friendCode), { displayName: display }))
+    }
+    const friends = await getDocs(collection(db, "users", profile.uid, "friends"))
+    friends.docs.forEach((f) =>
+      jobs.push(
+        updateDoc(doc(db, "users", f.id, "friends", profile.uid), { displayName: display }),
+      ),
+    )
+    const summaryRef = doc(db, "dailySummaries", dailySummaryId(profile.uid, today))
+    const summary = await getDoc(summaryRef)
+    if (summary.exists()) {
+      jobs.push(updateDoc(summaryRef, { displayName: display, updatedAt: serverTimestamp() }))
+    }
+    // One stale copy shouldn't fail the whole rename
+    const results = await Promise.allSettled(jobs)
+    const failed = results.filter((r) => r.status === "rejected").length
+    if (failed) console.warn(`Couldn't update ${failed} copies of the display name`)
+  },
+
+  /** Shows a renamed pet on today's leaderboard row too */
+  async propagatePetName(userId: string, petName: string, today: string) {
+    const summaryRef = doc(db, "dailySummaries", dailySummaryId(userId, today))
+    const summary = await getDoc(summaryRef)
+    if (summary.exists() && summary.data().petName !== null) {
+      await updateDoc(summaryRef, { petName: petName.trim(), updatedAt: serverTimestamp() })
+    }
+  },
+
+  /**
+   * Deletes everything the user owns: reactions they left, photos, friendships, friend code,
+   * daily summaries, drinks, pet and profile. Call before deleting the auth account.
+   * Order matters for the rules: summaries and the pet go before the drinks.
+   */
+  async deleteAllUserData(profile: UserProfile) {
+    const uid = profile.uid
+    const commitAll = async (refs: DocumentReference[]) => {
+      // A batch holds up to 500 writes
+      for (let i = 0; i < refs.length; i += 450) {
+        const batch = writeBatch(db)
+        refs.slice(i, i + 450).forEach((r) => batch.delete(r))
+        await batch.commit()
+      }
+    }
+
+    // Reactions you left on friends' photos
+    const myReactions = await getDocs(
+      query(collectionGroup(db, "reactions"), where("userId", "==", uid)),
+    )
+    await commitAll(myReactions.docs.map((d) => d.ref))
+
+    // Your photos (and the reactions on them)
+    const photos = await getDocs(query(collection(db, "drinkPhotos"), where("userId", "==", uid)))
+    for (const p of photos.docs) await databaseService.deleteDrinkPhotos(p.id)
+
+    // Friendships, both sides
+    const friends = await getDocs(collection(db, "users", uid, "friends"))
+    for (const f of friends.docs) await databaseService.removeFriend(uid, f.id)
+
+    if (profile.friendCode) {
+      await deleteDoc(doc(db, "friendCodes", profile.friendCode)).catch(() => {})
+    }
+
+    const summaries = await getDocs(
+      query(collection(db, "dailySummaries"), where("userId", "==", uid)),
+    )
+    await commitAll([...summaries.docs.map((d) => d.ref), doc(db, "pets", uid)])
+
+    const entries = await getDocs(
+      query(collection(db, "hydrationEntries"), where("userId", "==", uid)),
+    )
+    await commitAll(entries.docs.map((d) => d.ref))
+
+    await deleteDoc(doc(db, "users", uid))
   },
 
   subscribeToFriends(

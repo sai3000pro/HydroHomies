@@ -11,7 +11,7 @@ const fr: PartialTranslations = {
   errorScreen: {
     title: "Quelque chose s'est mal passé !",
     friendlySubtitle:
-      "C'est l'écran que vos utilisateurs verront en production lorsqu'une erreur sera lancée. Vous voudrez personnaliser ce message (situé dans `app/i18n/fr.ts`) et probablement aussi la mise en page (`app/screens/ErrorScreen`). Si vous voulez le supprimer complètement, vérifiez `app/app.tsx` pour le composant <ErrorBoundary>.",
+      "Désolé, HydroHype a rencontré une erreur inattendue. Touchez ci-dessous pour redémarrer l'application. Vos boissons et votre animal sont enregistrés.",
     reset: "RÉINITIALISER L'APPLICATION",
     traceTitle: "Erreur depuis %{name}",
   },

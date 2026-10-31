@@ -1,8 +1,9 @@
 import { FC, useCallback, useEffect, useState } from "react"
-import { Pressable, TextStyle, View, ViewStyle } from "react-native"
+import { TextStyle, View, ViewStyle } from "react-native"
 
 import { ActionTile } from "@/components/ActionTile"
 import { Button } from "@/components/Button"
+import { DrinkRow } from "@/components/DrinkRow"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
@@ -10,26 +11,17 @@ import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import {
   databaseService,
-  UNDO_WINDOW_MS,
   type DailySummary,
   type HydrationEntry,
 } from "@/services/firebase/database"
 import { syncReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { confirmAction, notify } from "@/utils/confirm"
-import { toDateKey } from "@/utils/dateKey"
 import { currentStreak, fillDays, HISTORY_DAYS } from "@/utils/hydrationStats"
-import { xpForWater } from "@/utils/petEvolution"
+import { useToday } from "@/utils/useToday"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
-
-const SOURCE_LABEL: Record<HydrationEntry["source"], string> = {
-  "ai": "AI",
-  "on-device": "On-device",
-  "manual": "By hand",
-}
 
 export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
@@ -39,23 +31,35 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const [summaryLoaded, setSummaryLoaded] = useState(false)
   const [entries, setEntries] = useState<HydrationEntry[]>([])
   const [loadError, setLoadError] = useState("")
+  const today = useToday()
 
+  // Resubscribes at midnight so "today" really is today
   useEffect(() => {
+    setSummary(null)
+    setSummaryLoaded(false)
+    setEntries([])
     const onError = (e: Error) => setLoadError(e.message)
     const unsubSummary = databaseService.subscribeToDailySummary(
       profile.uid,
       (s) => {
         setSummary(s)
         setSummaryLoaded(true)
+        setLoadError("")
       },
       onError,
+      today,
     )
-    const unsubEntries = databaseService.subscribeToTodayEntries(profile.uid, setEntries, onError)
+    const unsubEntries = databaseService.subscribeToTodayEntries(
+      profile.uid,
+      setEntries,
+      onError,
+      today,
+    )
     return () => {
       unsubSummary()
       unsubEntries()
     }
-  }, [profile.uid])
+  }, [profile.uid, today])
 
   const dailyGoal = profile.stats?.dailyWaterGoal ?? 2500
   const todayIntake = summary?.totalMl ?? 0
@@ -64,10 +68,10 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   // Refresh scheduled reminders on open, and drop today's once the goal is reached
   useEffect(() => {
     if (!summaryLoaded) return
-    syncReminders(pet?.name ?? "", goalReached).catch((e) =>
+    syncReminders(profile.uid, pet?.name ?? "", goalReached).catch((e) =>
       console.warn("Couldn't schedule reminders:", e?.message),
     )
-  }, [summaryLoaded, goalReached, pet?.name])
+  }, [summaryLoaded, goalReached, pet?.name, profile.uid])
   const progress = calculateProgress(todayIntake, dailyGoal)
   const remaining = Math.max(0, dailyGoal - todayIntake)
   const { palette } = theme.colors
@@ -75,27 +79,25 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   // Streak: recomputed when today's total changes and whenever Home comes back into view
   const [streak, setStreak] = useState(0)
   const loadStreak = useCallback(() => {
+    let cancelled = false
     databaseService
-      .getSummaryHistory(profile.uid, HISTORY_DAYS)
-      .then((h) => setStreak(currentStreak(fillDays(h, toDateKey(), HISTORY_DAYS, dailyGoal))))
-      .catch(() => {})
-  }, [profile.uid, dailyGoal])
-  useEffect(() => navigation.addListener("focus", loadStreak), [navigation, loadStreak])
+      .getSummaryHistory(profile.uid, HISTORY_DAYS, today)
+      .then((h) => {
+        if (!cancelled) setStreak(currentStreak(fillDays(h, today, HISTORY_DAYS, dailyGoal)))
+      })
+      .catch((e) => console.warn("Couldn't load streak:", e?.message))
+    return () => {
+      cancelled = true
+    }
+  }, [profile.uid, dailyGoal, today])
+  useEffect(
+    () =>
+      navigation.addListener("focus", () => {
+        loadStreak()
+      }),
+    [navigation, loadStreak],
+  )
   useEffect(loadStreak, [loadStreak, todayIntake])
-
-  async function undo(entry: HydrationEntry) {
-    const ok = await confirmAction(
-      `Delete this ${entry.amount} ml drink?`,
-      pet
-        ? `It comes off today's total and ${pet.name} loses the ${xpForWater(entry.amount)} XP it earned.`
-        : "It comes off today's total.",
-      "Delete",
-    )
-    if (!ok) return
-    databaseService
-      .deleteDrink(profile, entry.id)
-      .catch((e) => notify("Couldn't delete", e?.message ?? String(e)))
-  }
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($container)} safeAreaEdges={["top"]}>
@@ -205,57 +207,31 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       {entries.length > 0 && (
         <View style={themed($card)}>
           <Text preset="subheading" text="Today's Drinks" style={themed($sectionTitle)} />
-          {entries.map((entry, i) => {
-            const canUndo =
-              !!entry.timestamp && Date.now() - entry.timestamp.getTime() < UNDO_WINDOW_MS
-            return (
-              <View
-                key={entry.id}
-                style={[themed($entryRow), i === entries.length - 1 && $lastRow]}
-              >
-                <View style={$flexShrink}>
-                  <Text preset="bold" text={`${entry.amount} ml`} />
-                  <Text
-                    size="xs"
-                    style={themed($dim)}
-                    text={`${
-                      entry.timestamp
-                        ? entry.timestamp.toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "Saving…"
-                    } · ${SOURCE_LABEL[entry.source]}`}
-                    numberOfLines={1}
-                  />
-                </View>
-                {canUndo && (
-                  <Pressable
-                    onPress={() => undo(entry)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${entry.amount} millilitre drink`}
-                    hitSlop={8}
-                    style={({ pressed }) => [themed($undo), pressed && $pressed]}
-                  >
-                    <Text size="xs" text="Delete" style={themed($undoText)} />
-                  </Pressable>
-                )}
-              </View>
-            )
-          })}
+          {entries.map((entry, i) => (
+            <DrinkRow key={entry.id} entry={entry} isLast={i === entries.length - 1} />
+          ))}
         </View>
       )}
+      <Text
+        style={themed($historyLink)}
+        onPress={() => navigation.navigate("History")}
+        accessibilityRole="button"
+        text="See all drinks →"
+      />
     </Screen>
   )
 }
 
 const $centered: ViewStyle = { alignItems: "center" }
 const $title: TextStyle = { fontSize: 34, lineHeight: 42 }
-const $lastRow: ViewStyle = { borderBottomWidth: 0 }
 const $flexShrink: ViewStyle = { flexShrink: 1 }
-const $pressed: ViewStyle = { opacity: 0.6 }
 // The chip is light orange in both themes
 const $streakText: TextStyle = { color: "#6B4A00" }
+
+const $historyLink: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.water500,
+  textAlign: "center",
+})
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
@@ -278,16 +254,6 @@ const $streakChip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   paddingVertical: spacing.xxxs,
   borderRadius: 12,
 })
-
-const $undo: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xxs,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: colors.palette.neutral300,
-})
-
-const $undoText: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.error })
 
 const $logButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({ marginTop: spacing.md })
 
@@ -330,12 +296,3 @@ const $dimCentered: ThemedStyle<TextStyle> = ({ colors }) => ({
 })
 
 const $error: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.error })
-
-const $entryRow: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: spacing.sm,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.separator,
-})

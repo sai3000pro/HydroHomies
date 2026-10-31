@@ -105,12 +105,15 @@ export interface AchievementInput {
   days: DayStat[]
   petExperience: number
   friendCount: number
+  /** Ids unlocked before; they stay unlocked even if the data that earned them has aged out */
+  earned?: readonly string[]
 }
 
 export function computeAchievements({
   days,
   petExperience,
   friendCount,
+  earned = [],
 }: AchievementInput): Achievement[] {
   const best = bestStreak(days)
   const anyDrink = petExperience > 0 || days.some((d) => d.totalMl > 0)
@@ -124,14 +127,17 @@ export function computeAchievements({
     description: string,
     value: number,
     target: number,
-  ): Achievement => ({
-    id,
-    emoji,
-    title,
-    description,
-    unlocked: value >= target,
-    progress: Math.max(0, Math.min(1, value / target)),
-  })
+  ): Achievement => {
+    const kept = earned.includes(id)
+    return {
+      id,
+      emoji,
+      title,
+      description,
+      unlocked: kept || value >= target,
+      progress: kept ? 1 : Math.max(0, Math.min(1, value / target)),
+    }
+  }
 
   return [
     make("first-sip", "💧", "First Sip", "Log your first drink", anyDrink ? 1 : 0, 1),

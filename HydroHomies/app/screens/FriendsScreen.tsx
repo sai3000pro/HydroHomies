@@ -82,6 +82,22 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
       .catch((e) => setMessage({ text: e?.message ?? "Couldn't remove.", isError: true }))
   }
 
+  async function newCode() {
+    const ok = await confirmAction(
+      "Get a new friend code?",
+      "Your current friends stay. The old code stops working, so nobody else can use it to add you.",
+      "New code",
+    )
+    if (!ok) return
+    setShareNote("")
+    try {
+      setMyCode(await databaseService.regenerateFriendCode(profile))
+      setShareNote("New code ready.")
+    } catch (e: any) {
+      setCodeError(e?.message ?? "Couldn't make a new code.")
+    }
+  }
+
   async function shareCode() {
     const text = `Add me on HydroHype! My friend code is ${myCode} 💧`
     try {
@@ -111,6 +127,13 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
           <>
             <Text preset="heading" text={myCode} style={themed($code)} selectable />
             <Button text="Share code" onPress={shareCode} />
+            <Text
+              size="xs"
+              style={themed($link)}
+              onPress={newCode}
+              accessibilityRole="button"
+              text="Get a new code"
+            />
             {!!shareNote && (
               <Text size="sm" text={shareNote} style={{ color: theme.colors.palette.success500 }} />
             )}
@@ -123,7 +146,7 @@ export const FriendsScreen: FC<FriendsScreenProps> = ({ navigation }) => {
         <Text
           size="xs"
           style={themed($dim)}
-          text="Anyone with your code can add you. You'll both see each other on the friends leaderboard."
+          text="Anyone with your code can add you, and friends can see your drink photos. Get a new code if it got out."
         />
       </View>
 
@@ -234,3 +257,9 @@ const $smallButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
+
+const $link: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.water500,
+  textAlign: "center",
+  paddingVertical: 4,
+})

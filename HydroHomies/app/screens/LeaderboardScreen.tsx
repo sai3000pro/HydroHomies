@@ -13,16 +13,19 @@ import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { levelForXp } from "@/utils/petEvolution"
 import { useFriends } from "@/utils/useFriends"
+import { useToday } from "@/utils/useToday"
 import { shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface LeaderboardScreenProps extends AppStackScreenProps<"Leaderboard"> {}
 
 const MEDALS = ["🥇", "🥈", "🥉"]
+const LEADERBOARD_SIZE = 50
 
 export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
   const { profile } = useSignedInUser()
-  const { friends } = useFriends(profile.uid)
+  const { friends, error: friendsError } = useFriends(profile.uid)
+  const today = useToday()
 
   const [scope, setScope] = useState<"friends" | "everyone">("friends")
   const [rows, setRows] = useState<DailySummary[] | null>(null)
@@ -38,13 +41,33 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
       setError("")
     }
     const onError = (e: Error) => setError(e.message)
-    if (scope === "everyone") return databaseService.subscribeToLeaderboard(onRows, onError)
+    if (scope === "everyone") {
+      return databaseService.subscribeToLeaderboard(onRows, onError, LEADERBOARD_SIZE, today)
+    }
     if (friendIdsKey === null) return undefined
     const ids = [profile.uid, ...(friendIdsKey ? friendIdsKey.split(",") : [])]
-    return databaseService.subscribeToGroupLeaderboard(ids, onRows, onError)
-  }, [scope, friendIdsKey, profile.uid])
+    return databaseService.subscribeToGroupLeaderboard(ids, onRows, onError, today)
+  }, [scope, friendIdsKey, profile.uid, today])
+
+  // The friends tab can't load without the friend list
+  useEffect(() => {
+    if (scope === "friends" && friendsError) setError(friendsError)
+  }, [scope, friendsError])
+
+  // Everyone only loads the top LEADERBOARD_SIZE, so you may be further down
+  const [mySummary, setMySummary] = useState<DailySummary | null>(null)
+  useEffect(
+    () => databaseService.subscribeToDailySummary(profile.uid, setMySummary, undefined, today),
+    [profile.uid, today],
+  )
 
   const myRank = rows ? rows.findIndex((r) => r.userId === profile.uid) + 1 : 0
+  const subtitle =
+    myRank > 0
+      ? `You're #${myRank}`
+      : (mySummary?.totalMl ?? 0) > 0
+        ? `You're outside the top ${LEADERBOARD_SIZE} today`
+        : "Log a drink to get on the board"
 
   const renderItem = ({ item, index }: { item: DailySummary; index: number }) => {
     const isMe = item.userId === profile.uid
@@ -108,11 +131,7 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
       contentContainerStyle={themed($container)}
       safeAreaEdges={["top", "bottom"]}
     >
-      <ScreenHeader
-        title="🏆 Today"
-        subtitle={myRank > 0 ? `You're #${myRank}` : "Log a drink to get on the board"}
-        onBack={() => navigation.goBack()}
-      />
+      <ScreenHeader title="🏆 Today" subtitle={subtitle} onBack={() => navigation.goBack()} />
 
       <View style={themed($tabs)}>
         {(["friends", "everyone"] as const).map((s) => (

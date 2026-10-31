@@ -11,7 +11,7 @@ const ja: PartialTranslations = {
   errorScreen: {
     title: "問題が発生しました",
     friendlySubtitle:
-      "本番では、エラーが投げられた時にこのページが表示されます。もし使うならこのメッセージに変更を加えてください(`app/i18n/jp.ts`)レイアウトはこちらで変更できます(`app/screens/ErrorScreen`)。もしこのスクリーンを取り除きたい場合は、`app/app.tsx`にある<ErrorBoundary>コンポーネントをチェックしてください",
+      "申し訳ありません。HydroHype で予期しないエラーが発生しました。下をタップしてアプリを再起動してください。記録とペットは保存されています。",
     reset: "リセット",
     traceTitle: "エラーのスタック: %{name}",
   },

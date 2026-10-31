@@ -27,6 +27,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
   const [isPasswordHidden, setIsPasswordHidden] = useState(true)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [errorText, setErrorText] = useState("")
+  const [infoText, setInfoText] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   const emailError =
@@ -35,6 +36,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
   async function login() {
     setIsSubmitted(true)
     setErrorText("")
+    setInfoText("")
     if (!isFirebaseConfigured) {
       setErrorText("Firebase is not configured. See SETUP.md.")
       return
@@ -54,6 +56,22 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
       setErrorText(describeAuthError(e))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function resetPassword() {
+    setIsSubmitted(true)
+    setErrorText("")
+    setInfoText("")
+    if (!EMAIL_RE.test(email.trim())) {
+      setErrorText("Enter your email above, then tap Forgot password.")
+      return
+    }
+    try {
+      await authService.sendPasswordReset(email.trim())
+      setInfoText(`If ${email.trim()} has an account, a reset link is on its way.`)
+    } catch (e: any) {
+      setErrorText(describeAuthError(e))
     }
   }
 
@@ -124,6 +142,13 @@ export const LoginScreen: FC<LoginScreenProps> = ({ navigation }) => {
             />
 
             {!!errorText && <Text style={themed($error)} text={errorText} />}
+            {!!infoText && <Text style={themed($info)} text={infoText} />}
+            <Text
+              style={themed($forgot)}
+              onPress={resetPassword}
+              accessibilityRole="button"
+              text="Forgot password?"
+            />
           </View>
 
           <Text style={themed($text)}>
@@ -173,6 +198,18 @@ const $error: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
 })
 
 const $text: ThemedStyle<TextStyle> = () => ({ color: "#000000" })
+
+const $info: ThemedStyle<TextStyle> = ({ spacing }) => ({
+  marginTop: spacing.md,
+  color: "#1E6B3A",
+  textAlign: "center",
+})
+
+const $forgot: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
+  marginTop: spacing.md,
+  color: colors.palette.water700,
+  textAlign: "center",
+})
 
 const $link: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.palette.water700,

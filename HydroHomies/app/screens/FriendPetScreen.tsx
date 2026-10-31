@@ -11,6 +11,7 @@ import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { databaseService, type DailySummary, type PetState } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { useToday } from "@/utils/useToday"
 import { calculateProgress } from "@/utils/waterGoalCalculator"
 
 interface FriendPetScreenProps extends AppStackScreenProps<"FriendPet"> {}
@@ -25,16 +26,17 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
   const [pet, setPet] = useState<PetState | null | undefined>(undefined)
   const [summary, setSummary] = useState<DailySummary | null>(null)
   const [error, setError] = useState("")
+  const today = useToday()
 
   useEffect(() => {
     const onError = (e: Error) => setError(e.message)
     const unsubPet = databaseService.subscribeToPet(userId, setPet, onError)
-    const unsubSummary = databaseService.subscribeToDailySummary(userId, setSummary, onError)
+    const unsubSummary = databaseService.subscribeToDailySummary(userId, setSummary, onError, today)
     return () => {
       unsubPet()
       unsubSummary()
     }
-  }, [userId])
+  }, [userId, today])
 
   const progress = summary ? calculateProgress(summary.totalMl, summary.goalMl) : 0
 
@@ -66,7 +68,7 @@ export const FriendPetScreen: FC<FriendPetScreenProps> = ({ navigation, route })
         {summary ? (
           <>
             <Text
-              text={`${(summary.totalMl / 1000).toFixed(2)} L of ${(summary.goalMl / 1000).toFixed(1)} L · ${progress}%`}
+              text={`${(summary.totalMl / 1000).toFixed(2)} L of ${(summary.goalMl / 1000).toFixed(2)} L · ${progress}%`}
             />
             <Text size="sm" style={themed($dim)} text={`${summary.entryCount} drinks logged`} />
           </>

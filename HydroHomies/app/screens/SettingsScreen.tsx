@@ -14,10 +14,13 @@ import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 import { useAuth, useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
+import { authService, describeAuthError } from "@/services/firebase/auth"
 import { databaseService } from "@/services/firebase/database"
+import { cancelReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { confirmAction } from "@/utils/confirm"
+import { toDateKey } from "@/utils/dateKey"
 import { loadString } from "@/utils/storage"
 
 interface SettingsScreenProps extends AppStackScreenProps<"Settings"> {}
@@ -45,6 +48,10 @@ export const SettingsScreen: FC<SettingsScreenProps> = ({ navigation }) => {
   const [status, setStatus] = useState<{ text: string; isError: boolean } | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [themeChoice, setThemeChoice] = useState<ThemeChoice>(savedThemeChoice)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteError, setDeleteError] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const goal = previewGoal(stats)
   const currentGoal = s?.dailyWaterGoal ?? 0
@@ -64,12 +71,41 @@ export const SettingsScreen: FC<SettingsScreenProps> = ({ navigation }) => {
         username: name,
         stats: parsed.stats,
       })
-      if (pet && petName.trim() !== pet.name) await databaseService.renamePet(profile.uid, petName)
+      if (name !== profile.username) {
+        await databaseService.propagateDisplayName(profile, name, toDateKey())
+      }
+      if (pet && petName.trim() !== pet.name) {
+        await databaseService.renamePet(profile.uid, petName)
+        await databaseService.propagatePetName(profile.uid, petName, toDateKey()).catch(() => {})
+      }
       setStatus({ text: "Saved ✓", isError: false })
     } catch (e: any) {
-      setStatus({ text: e?.message ?? "Couldn't save. Try again.", isError: true })
+      setStatus({ text: describeAuthError(e), isError: true })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function deleteAccount() {
+    setDeleteError("")
+    if (!deletePassword) return setDeleteError("Enter your password to confirm.")
+    const ok = await confirmAction(
+      "Delete your account?",
+      "This permanently deletes your profile, pet, drinks, photos and friendships. It can't be undone.",
+      "Delete forever",
+    )
+    if (!ok) return
+    setIsDeleting(true)
+    try {
+      // Check the password first, so a typo doesn't leave the data half-deleted
+      await authService.reauthenticate(deletePassword)
+      await cancelReminders().catch(() => {})
+      await databaseService.deleteAllUserData(profile)
+      // Signs out automatically; the navigator returns to Login
+      await authService.deleteCurrentUser()
+    } catch (e: any) {
+      setDeleteError(describeAuthError(e))
+      setIsDeleting(false)
     }
   }
 
@@ -149,10 +185,48 @@ export const SettingsScreen: FC<SettingsScreenProps> = ({ navigation }) => {
           text="Log out"
           onPress={async () => {
             if (await confirmAction("Log out?", "You can log back in any time.", "Log out")) {
-              logout()
+              logout().catch((e) => setStatus({ text: describeAuthError(e), isError: true }))
             }
           }}
         />
+      </View>
+
+      <View style={themed($card)}>
+        <Text preset="subheading" text="Delete account" />
+        {!showDelete ? (
+          <Button
+            text="Delete my account"
+            textStyle={{ color: theme.colors.error }}
+            onPress={() => setShowDelete(true)}
+          />
+        ) : (
+          <>
+            <Text
+              size="sm"
+              style={themed($dim)}
+              text="Permanently deletes your profile, pet, drinks, photos, reactions and friendships."
+            />
+            <TextField
+              label="Your password"
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+            />
+            <Button
+              text={isDeleting ? "Deleting…" : "Delete forever"}
+              onPress={deleteAccount}
+              disabled={isDeleting}
+              style={{ borderColor: theme.colors.error }}
+              textStyle={{ color: theme.colors.error }}
+            />
+            <Button text="Cancel" onPress={() => setShowDelete(false)} disabled={isDeleting} />
+            {!!deleteError && (
+              <Text size="sm" style={{ color: theme.colors.error }} text={deleteError} />
+            )}
+          </>
+        )}
       </View>
     </Screen>
   )

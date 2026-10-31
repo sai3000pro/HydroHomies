@@ -55,6 +55,11 @@ export async function requestAiEstimate(
   const directKey = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY
   if (directKey) return callOpenRouterDirect(directKey, image, phase, knownBottleVolume)
 
+  // The function only exists if it was deployed (Blaze plan). Without this flag, skip it
+  // instead of waiting for the call to fail on every photo.
+  if (process.env.EXPO_PUBLIC_USE_ESTIMATE_FUNCTION !== "1") {
+    throw new Error("AI estimate isn't set up (no OpenRouter key)")
+  }
   const { data } = await estimateBottleFn({
     image,
     phase,

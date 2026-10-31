@@ -4,14 +4,43 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isMl(v) { return v is int && v >= 0 && v <= 3000; }
+    function entryPath(id) { return /databases/$(database)/documents/hydrationEntries/$(id); }
+
+    // "YYYY-MM-DD" for a timestamp (UTC). Local dates are within a day of UTC.
+    function pad(n) { return n < 10 ? '0' + string(n) : string(n); }
+    function dk(t) { return string(t.year()) + '-' + pad(t.month()) + '-' + pad(t.day()); }
+    function isRecentDateKey(k) {
+      return k == dk(request.time)
+        || k == dk(request.time - duration.value(1, 'd'))
+        || k == dk(request.time + duration.value(1, 'd'));
+    }
+
+    // `id` is a drink created in this same write (it didn't exist before, it does after)
+    function isNewEntry(id, uid) {
+      return id is string && id != ''
+        && !exists(entryPath(id))
+        && existsAfter(entryPath(id))
+        && getAfter(entryPath(id)).data.userId == uid;
+    }
+    // `id` is a drink deleted in this same write
+    function isRemovedEntry(id, uid) {
+      return id is string && id != ''
+        && exists(entryPath(id))
+        && !existsAfter(entryPath(id))
+        && get(entryPath(id)).data.userId == uid;
+    }
 
     // Private profile: email and body stats. Only the owner can see it.
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)
         && request.resource.data.get('username', '') is string
-        && request.resource.data.get('username', '').size() <= 24;
-      allow delete: if false;
+        && request.resource.data.get('username', '').size() <= 24
+        && request.resource.data.get('stats', {}).get('dailyWaterGoal', 2500) is number
+        && request.resource.data.get('stats', {}).get('dailyWaterGoal', 2500) >= 500
+        && request.resource.data.get('stats', {}).get('dailyWaterGoal', 2500) <= 10000;
+      // Account deletion
+      allow delete: if isOwner(uid);
 
       // Friends: users/{uid}/friends/{friendId}. Adding is mutual, so A writes both
       // A/friends/B and B/friends/A. Both docs carry B's friend code, which proves A knows it.
@@ -32,9 +61,14 @@ service cloud.firestore {
             // Their list: they're adding me, and the code is theirs
             || (request.auth.uid == friendId && codeOwner(request.resource.data.code) == uid)
           );
+        // The friend can update how their own name appears on your list (after renaming)
+        allow update: if signedIn()
+          && request.auth.uid == friendId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() <= 24;
         // Either side can end the friendship
         allow delete: if isOwner(uid) || (signedIn() && request.auth.uid == friendId);
-        allow update: if false;
       }
     }
 
@@ -47,37 +81,50 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 24
         && code.matches('^[A-Z0-9]{6}$');
-      allow update, delete: if false;
+      // The owner can keep the name current, or retire the code (new code / account deletion)
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 24;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     // Pets are public to signed-in users (leaderboard, friend view).
     match /pets/{uid} {
+      function isPetName(n) { return n is string && n.size() > 0 && n.size() <= 20; }
+      function isHealth(h) { return h is number && h >= 0 && h <= 100; }
+      function xpDelta() { return request.resource.data.experience - resource.data.experience; }
+      function linked() { return request.resource.data.get('lastEntryId', ''); }
+
       allow read: if signedIn();
       allow create: if isOwner(uid)
         && request.resource.data.userId == uid
         && request.resource.data.species in ['elephant', 'alien', 'sphele']
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 20
+        && isPetName(request.resource.data.name)
         && request.resource.data.experience is int
         // New pets start at 0; pets migrated from the hackathon build keep their small XP
         && request.resource.data.experience >= 0
-        && request.resource.data.experience <= 1000;
-      // XP moves by at most what one maximum-size drink earns (3000 ml -> 300 XP):
-      // up when logging, down when undoing a drink. Renaming is allowed.
+        && request.resource.data.experience <= 1000
+        && isHealth(request.resource.data.get('health', 100));
+      // XP only moves together with a drink in the same write: +ml/10 when one is logged,
+      // back down (at most that much) when one is deleted. Renaming changes nothing else.
       allow update: if isOwner(uid)
         && request.resource.data.userId == uid
         && request.resource.data.species == resource.data.species
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 20
+        && isPetName(request.resource.data.name)
         && request.resource.data.experience is int
         && request.resource.data.experience >= 0
-        && request.resource.data.experience >= resource.data.experience - 300
-        && request.resource.data.experience <= resource.data.experience + 300
-        && request.resource.data.health >= 0
-        && request.resource.data.health <= 100;
-      allow delete: if false;
+        && isHealth(request.resource.data.health)
+        && (
+          (isNewEntry(linked(), uid)
+            && xpDelta() == math.floor(getAfter(entryPath(linked())).data.amount / 10))
+          || (isRemovedEntry(linked(), uid)
+            && xpDelta() <= 0
+            && -xpDelta() <= math.floor(get(entryPath(linked())).data.amount / 10))
+          || (xpDelta() == 0 && request.resource.data.health == resource.data.health)
+        );
+      allow delete: if isOwner(uid);
     }
 
     // Individual drinks: private to the owner.
@@ -87,12 +134,28 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && isMl(request.resource.data.amount)
         && request.resource.data.amount > 0
-        && request.resource.data.dateKey is string;
-      // Undo: the owner can delete a drink within 24 hours of logging it
-      allow delete: if signedIn()
-        && resource.data.userId == request.auth.uid
-        && resource.data.timestamp is timestamp
-        && request.time < resource.data.timestamp + duration.value(1, 'd');
+        && request.resource.data.dateKey is string
+        && isRecentDateKey(request.resource.data.dateKey)
+        && request.resource.data.timestamp == request.time;
+      // Deleting a drink must take its ml off that day's total and its XP off the pet in the
+      // same write, so log-then-delete can't be used to farm. (Docs deleted in the same write,
+      // as in account deletion, are skipped.) The app only offers undo for 24 hours.
+      function summaryOf() {
+        return /databases/$(database)/documents/dailySummaries/$(request.auth.uid + '_' + resource.data.get('dateKey', 'none'));
+      }
+      function petOf() { return /databases/$(database)/documents/pets/$(request.auth.uid); }
+      function lowered(before, by) { return before >= by ? before - by : 0; }
+      function summaryLowered() {
+        return !existsAfter(summaryOf())
+          || getAfter(summaryOf()).data.totalMl == lowered(get(summaryOf()).data.totalMl, resource.data.amount);
+      }
+      function petLowered() {
+        return !existsAfter(petOf())
+          || getAfter(petOf()).data.experience
+            == lowered(get(petOf()).data.experience, math.floor(resource.data.amount / 10));
+      }
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid
+        && summaryLowered() && petLowered();
       allow update: if false;
     }
 
@@ -100,16 +163,56 @@ service cloud.firestore {
     match /dailySummaries/{summaryId} {
       // On create `resource` is null, so the previous total is 0
       function prevTotal() { return resource == null ? 0 : resource.data.totalMl; }
+      function delta() { return request.resource.data.totalMl - prevTotal(); }
+      function linked() { return request.resource.data.get('lastEntryId', ''); }
+      function prevCount() { return resource == null ? 0 : resource.data.entryCount; }
+      function petPath() { return /databases/$(database)/documents/pets/$(request.auth.uid); }
+      // Without a pet the summary shows 0 XP; with one, exactly the pet's XP and health after this write
+      function petMatches() {
+        return existsAfter(petPath())
+          ? request.resource.data.petExperience == getAfter(petPath()).data.experience
+            && request.resource.data.petHealth == getAfter(petPath()).data.health
+          : request.resource.data.petExperience == 0;
+      }
+      function sameDay(e) {
+        return e.dateKey == request.resource.data.dateKey && e.amount == (delta() < 0 ? -delta() : delta());
+      }
+      function validShape() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['userId', 'dateKey', 'displayName', 'totalMl', 'goalMl',
+            'entryCount', 'petName', 'petSpecies', 'petExperience', 'petHealth', 'updatedAt',
+            'lastEntryId'])
+          && d.totalMl is int && d.totalMl >= 0
+          && d.displayName is string && d.displayName.size() <= 24
+          && d.goalMl is number && d.goalMl >= 500 && d.goalMl <= 10000
+          && d.entryCount is int && d.entryCount >= 0
+          && (d.petName == null || (d.petName is string && d.petName.size() <= 20))
+          && (d.petSpecies == null || d.petSpecies in ['elephant', 'alien', 'sphele'])
+          && d.petExperience is int && d.petExperience >= 0
+          && d.petHealth is number && d.petHealth >= 0 && d.petHealth <= 100;
+      }
       allow read: if signedIn();
       allow create, update: if signedIn()
         && request.resource.data.userId == request.auth.uid
         && summaryId == request.auth.uid + '_' + request.resource.data.dateKey
-        && request.resource.data.totalMl is int
-        // Each write adds one drink of at most 3000 ml, or removes one (undoing a mistake)
-        && request.resource.data.totalMl >= 0
-        && request.resource.data.totalMl >= prevTotal() - 3000
-        && request.resource.data.totalMl <= prevTotal() + 3000;
-      allow delete: if false;
+        && validShape()
+        && (
+          // The total only changes by exactly the drink logged or deleted in this write,
+          // and the pet numbers shown on the leaderboard match the pet after the write
+          (delta() > 0 && isNewEntry(linked(), request.auth.uid)
+            && sameDay(getAfter(entryPath(linked())).data)
+            && request.resource.data.entryCount == prevCount() + 1
+            && petMatches())
+          || (delta() < 0 && isRemovedEntry(linked(), request.auth.uid)
+            && sameDay(get(entryPath(linked())).data)
+            && request.resource.data.entryCount == (prevCount() > 0 ? prevCount() - 1 : 0)
+            && petMatches())
+          // Display info (e.g. a new username or pet name) can change on its own
+          || (delta() == 0 && resource != null
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['displayName', 'petName', 'updatedAt']))
+        );
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     // drinkPhotos/{entryId}: before/after thumbnails of one drink (JPEG data URIs).
@@ -123,12 +226,12 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isFriendOf(resource.data.userId));
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
-        && isMl(request.resource.data.amount)
-        && request.resource.data.dateKey is string
         && isThumb(request.resource.data.before)
         && isThumb(request.resource.data.after)
-        // The photos belong to a drink this user logged
-        && get(/databases/$(database)/documents/hydrationEntries/$(entryId)).data.userId == request.auth.uid;
+        // The photos belong to a drink this user logged, and describe it truthfully
+        && get(entryPath(entryId)).data.userId == request.auth.uid
+        && request.resource.data.amount == get(entryPath(entryId)).data.amount
+        && request.resource.data.dateKey == get(entryPath(entryId)).data.dateKey;
       // You can take your photos down, but not edit them
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if false;
@@ -149,13 +252,19 @@ service cloud.firestore {
           && request.resource.data.emoji in ['💧', '🔥', '🤡', '🧢']
           && request.resource.data.displayName is string
           && request.resource.data.displayName.size() <= 24;
-        // The reactor can take it back; the photo owner can clear it when deleting the photos
+        // The reactor can take it back; the photo owner can clear it when deleting the photos.
+        // A photo that's already gone can't be looked up, so the reactor check comes first.
         allow delete: if signedIn()
           && (reactorId == request.auth.uid || photoOwner() == request.auth.uid);
       }
     }
 
-    // aiUsage/{uid}_{day}: written only by the estimateBottle function (Admin SDK).
+    // Collection-group lookup of your own reactions, used when deleting your account
+    match /{path=**}/reactions/{reactorId} {
+      allow list: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Everything else, e.g. aiUsage written by the optional estimateBottle function (Admin SDK)
     match /{document=**} {
       allow read, write: if false;
     }

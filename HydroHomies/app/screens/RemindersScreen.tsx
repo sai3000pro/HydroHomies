@@ -10,6 +10,7 @@ import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { databaseService } from "@/services/firebase/database"
 import {
+  hasReminderPermission,
   loadReminderSettings,
   reminderTimes,
   remindersSupported,
@@ -20,6 +21,7 @@ import {
 } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { useToday } from "@/utils/useToday"
 
 interface RemindersScreenProps extends AppStackScreenProps<"Reminders"> {}
 
@@ -32,25 +34,41 @@ export const RemindersScreen: FC<RemindersScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
   const { profile, pet } = useSignedInUser()
 
-  const [settings, setSettings] = useState<ReminderSettings>(loadReminderSettings)
+  const [settings, setSettings] = useState<ReminderSettings>(() =>
+    loadReminderSettings(profile.uid),
+  )
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [error, setError] = useState("")
-  const [goalReached, setGoalReached] = useState(false)
+  // null until today's total is known, so the first sync doesn't schedule today's reminders by mistake
+  const [goalReached, setGoalReached] = useState<boolean | null>(null)
+  const today = useToday()
 
   const goalMl = profile.stats?.dailyWaterGoal ?? 2500
   useEffect(
     () =>
-      databaseService.subscribeToDailySummary(profile.uid, (s) =>
-        setGoalReached((s?.totalMl ?? 0) >= goalMl),
+      databaseService.subscribeToDailySummary(
+        profile.uid,
+        (s) => setGoalReached((s?.totalMl ?? 0) >= goalMl),
+        (e) => setError(e.message),
+        today,
       ),
-    [profile.uid, goalMl],
+    [profile.uid, goalMl, today],
   )
+
+  // If notifications were turned off in the phone's settings, say so instead of showing a schedule
+  useEffect(() => {
+    if (!remindersSupported || !settings.enabled) return
+    hasReminderPermission().then((granted) => setPermissionDenied(!granted))
+  }, [settings.enabled])
 
   // Save and reschedule on every change
   useEffect(() => {
-    saveReminderSettings(settings)
-    syncReminders(pet?.name ?? "", goalReached).catch((e) => setError(e?.message ?? String(e)))
-  }, [settings, pet?.name, goalReached])
+    saveReminderSettings(profile.uid, settings)
+    if (goalReached === null) return
+    syncReminders(profile.uid, pet?.name ?? "", goalReached).catch((e) =>
+      setError(e?.message ?? String(e)),
+    )
+  }, [settings, pet?.name, goalReached, profile.uid])
 
   async function setEnabled(enabled: boolean) {
     setError("")
@@ -63,7 +81,7 @@ export const RemindersScreen: FC<RemindersScreenProps> = ({ navigation }) => {
   }
 
   const update = (patch: Partial<ReminderSettings>) => setSettings((s) => ({ ...s, ...patch }))
-  const next = reminderTimes(settings, goalReached)[0]
+  const next = permissionDenied ? undefined : reminderTimes(settings, !!goalReached)[0]
 
   if (!remindersSupported) {
     return (

@@ -15,6 +15,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
@@ -61,7 +62,13 @@ async function read(path: string) {
 }
 
 function profileFor(uid: string, username = uid): UserProfile {
-  return { uid, email: `${uid}@test.dev`, username, stats: { ...stats, dailyWaterGoal: 2500 } }
+  return {
+    uid,
+    email: `${uid}@test.dev`,
+    username,
+    stats: { ...stats, dailyWaterGoal: 2500 },
+    achievements: [],
+  }
 }
 
 function logDrink(uid: string, amount: number) {
@@ -164,7 +171,7 @@ describe("adoptPet (pets/{uid})", () => {
     await assertFails(getDoc(doc(actAs(null), "pets/alice")))
   })
 
-  it("blocks big XP jumps and species changes", async () => {
+  it("blocks XP changes that don't come with a drink, but allows renaming", async () => {
     await seed("pets/alice", {
       userId: "alice",
       species: "alien",
@@ -173,15 +180,25 @@ describe("adoptPet (pets/{uid})", () => {
       health: 50,
     })
     const db = actAs("alice")
-    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 401 }))
-    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: -1 }))
+    // No drink logged in the same write, so any XP change is refused
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 101 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 400 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 0 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { health: 100 }))
     await assertFails(updateDoc(doc(db, "pets/alice"), { species: "elephant" }))
     await assertFails(updateDoc(doc(db, "pets/alice"), { name: "" }))
-    await assertSucceeds(updateDoc(doc(db, "pets/alice"), { experience: 50 }))
-    await assertSucceeds(updateDoc(doc(db, "pets/alice"), { experience: 350 }))
-    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 49 }))
+    // Claiming a drink that doesn't exist doesn't help either
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 400, lastEntryId: "made-up" }))
     await assertSucceeds(databaseService.renamePet("alice", "Splash"))
-    expect((await read("pets/alice"))?.name).toBe("Splash")
+    expect(await read("pets/alice")).toMatchObject({ name: "Splash", experience: 100 })
+  })
+
+  it("lets XP grow by exactly what a logged drink earns", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
+    await assertSucceeds(logDrink("alice", 1234))
+    expect((await read("pets/alice"))?.experience).toBe(123)
   })
 })
 
@@ -303,18 +320,57 @@ describe("logHydration", () => {
     )
   })
 
-  it("blocks changing the daily total by more than one drink", async () => {
+  it("blocks changing the daily total without a matching drink", async () => {
+    await seed("users/alice", { username: "alice" })
     const db = actAs("alice")
     const dateKey = toDateKey()
     const ref = doc(db, "dailySummaries", dailySummaryId("alice", dateKey))
-    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 3001 }))
-    await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 3000 }))
-    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 6001 }))
-    await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 6000 }))
-    // Undoing one drink can lower it by at most 3000, and never below 0
-    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 2999 }))
-    await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 3000 }))
-    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: -1 }))
+    const row = (totalMl: number, extra: Record<string, unknown> = {}) => ({
+      userId: "alice",
+      dateKey,
+      displayName: "alice",
+      totalMl,
+      goalMl: 2500,
+      entryCount: 1,
+      petName: null,
+      petSpecies: null,
+      petExperience: 0,
+      petHealth: 100,
+      ...extra,
+    })
+    // Writing a total directly, with no drink in the same write, is refused
+    await assertFails(setDoc(ref, row(500)))
+    await assertFails(setDoc(ref, row(500, { lastEntryId: "made-up" })))
+
+    // A real drink works, and the total must match it exactly
+    await logDrink("alice", 500)
+    expect((await read(dailySummaryPath("alice")))?.totalMl).toBe(500)
+    await assertFails(setDoc(ref, row(9999)))
+    await assertFails(updateDoc(ref, { petExperience: 5000 }))
+    await assertFails(updateDoc(ref, { goalMl: 100 }))
+    // Display fields alone can change (e.g. after a rename)
+    await assertSucceeds(updateDoc(ref, { displayName: "alice2" }))
+    await assertFails(updateDoc(ref, { displayName: "x".repeat(25) }))
+  })
+
+  it("rejects drinks dated far from today or with a fake timestamp", async () => {
+    const db = actAs("alice")
+    await assertFails(
+      setDoc(doc(collection(db, "hydrationEntries")), {
+        userId: "alice",
+        dateKey: "2000-01-01",
+        amount: 100,
+        timestamp: serverTimestamp(),
+      }),
+    )
+    await assertFails(
+      setDoc(doc(collection(db, "hydrationEntries")), {
+        userId: "alice",
+        dateKey: toDateKey(),
+        amount: 100,
+        timestamp: Timestamp.fromMillis(Date.now() + 86_400_000),
+      }),
+    )
   })
 
   it("keeps drinks private to their owner", async () => {
@@ -656,20 +712,54 @@ describe("undoing a drink", () => {
     expect((await read("pets/alice"))?.experience).toBe(50)
   })
 
-  it("blocks deleting someone else's drink or one older than 24 hours", async () => {
+  it("blocks deleting someone else's drink, or a drink without taking it off the totals", async () => {
     await seed("users/alice", { username: "alice" })
     actAs("alice")
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
     const logged = await logDrink("alice", 300)
-    actAs("mallory")
     await assertFails(deleteDoc(doc(actAs("mallory"), "hydrationEntries", logged.entryId)))
+    // Deleting just the entry would keep the ml and XP it earned
+    await assertFails(deleteDoc(doc(actAs("alice"), "hydrationEntries", logged.entryId)))
+  })
 
+  it("refuses to undo a drink older than 24 hours, and keeps its photos", async () => {
+    await seed("users/alice", { username: "alice" })
     await seed("hydrationEntries/old", {
       userId: "alice",
       dateKey: "2000-01-01",
       amount: 300,
       timestamp: Timestamp.fromMillis(Date.now() - 25 * 60 * 60 * 1000),
     })
-    await assertFails(deleteDoc(doc(actAs("alice"), "hydrationEntries", "old")))
+    await seed("drinkPhotos/old", {
+      userId: "alice",
+      amount: 300,
+      dateKey: "2000-01-01",
+      before: "data:image/jpeg;base64,/9j/AAAA",
+      after: "data:image/jpeg;base64,/9j/AAAA",
+    })
+    actAs("alice")
+    await expect(databaseService.deleteDrink(profileFor("alice"), "old")).rejects.toThrow(
+      /24 hours/,
+    )
+    expect(await read("hydrationEntries/old")).toBeDefined()
+    expect(await read("drinkPhotos/old")).toBeDefined()
+  })
+
+  it("takes back the health a drink gave", async () => {
+    await seed("users/alice", { username: "alice" })
+    await seed("pets/alice", {
+      userId: "alice",
+      species: "alien",
+      name: "Zap",
+      experience: 0,
+      health: 20,
+    })
+    actAs("alice")
+    const logged = await logDrink("alice", 1250) // +50 health on a 2500 ml goal
+    expect((await read("pets/alice"))?.health).toBe(70)
+    await databaseService.deleteDrink(profileFor("alice"), logged.entryId)
+    expect(await read("pets/alice")).toMatchObject({ health: 20, experience: 0 })
+    expect(await read(dailySummaryPath("alice"))).toMatchObject({ petHealth: 20, totalMl: 0 })
   })
 })
 
@@ -719,5 +809,115 @@ describe("reactions on drink photos", () => {
         displayName: "bob",
       }),
     )
+  })
+})
+
+describe("account deletion", () => {
+  it("deletes everything a user owns, and their friends keep working", async () => {
+    await seed("users/bob", { username: "bob" })
+    actAs("bob")
+    const bobCode = await databaseService.ensureFriendCode(profileFor("bob"))
+
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const aliceCode = await databaseService.ensureFriendCode(profileFor("alice"))
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    const logged = await logDrink("alice", 400)
+    await databaseService.saveDrinkPhotos({
+      userId: "alice",
+      entryId: logged.entryId,
+      amount: 400,
+      dateKey: logged.dateKey,
+      before: "data:image/jpeg;base64,/9j/AAAA",
+      after: "data:image/jpeg;base64,/9j/AAAA",
+    })
+
+    // Bob logs a drink with photos, and Alice reacts to it
+    actAs("bob")
+    const bobDrink = await logDrink("bob", 200)
+    await databaseService.saveDrinkPhotos({
+      userId: "bob",
+      entryId: bobDrink.entryId,
+      amount: 200,
+      dateKey: bobDrink.dateKey,
+      before: "data:image/jpeg;base64,/9j/AAAA",
+      after: "data:image/jpeg;base64,/9j/AAAA",
+    })
+    actAs("alice")
+    await databaseService.setReaction(bobDrink.entryId, profileFor("alice"), "🔥")
+
+    const alice = { ...profileFor("alice"), friendCode: aliceCode }
+    await assertSucceeds(databaseService.deleteAllUserData(alice))
+
+    for (const path of [
+      "users/alice",
+      "pets/alice",
+      `hydrationEntries/${logged.entryId}`,
+      `drinkPhotos/${logged.entryId}`,
+      dailySummaryPath("alice"),
+      `friendCodes/${aliceCode}`,
+      "users/bob/friends/alice",
+      `drinkPhotos/${bobDrink.entryId}/reactions/alice`,
+    ]) {
+      expect(await read(path)).toBeUndefined()
+    }
+    // Bob's own data is untouched
+    expect(await read(`drinkPhotos/${bobDrink.entryId}`)).toBeDefined()
+    expect(await read(dailySummaryPath("bob"))).toMatchObject({ totalMl: 200 })
+  })
+
+  it("doesn't let anyone delete another user's account data", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
+    await logDrink("alice", 300)
+    const db = actAs("mallory")
+    await assertFails(deleteDoc(doc(db, "users/alice")))
+    await assertFails(deleteDoc(doc(db, "pets/alice")))
+    await assertFails(deleteDoc(doc(db, dailySummaryPath("alice"))))
+  })
+})
+
+describe("renaming", () => {
+  it("carries a new username to the friend code, friends' lists and today's row", async () => {
+    await seed("users/bob", { username: "bob" })
+    actAs("bob")
+    const bobCode = await databaseService.ensureFriendCode(profileFor("bob"))
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const aliceCode = await databaseService.ensureFriendCode(profileFor("alice"))
+    await databaseService.addFriendByCode(profileFor("alice"), bobCode)
+    await logDrink("alice", 300)
+
+    const alice = { ...profileFor("alice"), friendCode: aliceCode }
+    await databaseService.propagateDisplayName(alice, "Alicia", toDateKey())
+    expect((await read(`friendCodes/${aliceCode}`))?.displayName).toBe("Alicia")
+    expect((await read("users/bob/friends/alice"))?.displayName).toBe("Alicia")
+    expect((await read(dailySummaryPath("alice")))?.displayName).toBe("Alicia")
+
+    // Nobody else can rename you on their friends' lists
+    const db = actAs("mallory")
+    await assertFails(updateDoc(doc(db, "users/bob/friends/alice"), { displayName: "lol" }))
+  })
+
+  it("replaces the friend code; the old one stops working", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const oldCode = await databaseService.ensureFriendCode(profileFor("alice"))
+    const newCode = await databaseService.regenerateFriendCode({
+      ...profileFor("alice"),
+      friendCode: oldCode,
+    })
+    expect(newCode).not.toBe(oldCode)
+    expect(await read(`friendCodes/${oldCode}`)).toBeUndefined()
+    expect((await read("users/alice"))?.friendCode).toBe(newCode)
+
+    await seed("users/bob", { username: "bob" })
+    actAs("bob")
+    await expect(databaseService.addFriendByCode(profileFor("bob"), oldCode)).rejects.toThrow(
+      /No one/,
+    )
+    await expect(databaseService.addFriendByCode(profileFor("bob"), newCode)).resolves.toBe("alice")
   })
 })

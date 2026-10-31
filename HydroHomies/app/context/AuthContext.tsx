@@ -24,6 +24,9 @@ export type AuthContextType = {
   pet: PetState | null
   /** True until the first profile and pet snapshots arrive for the signed-in user */
   isUserDataLoading: boolean
+  /** Set when the profile or pet couldn't be loaded (offline, permissions). Retry with retryUserData. */
+  userDataError: string
+  retryUserData: () => void
   /**
    * Set while SignUpScreen creates the auth account and profile, so the
    * navigator doesn't route to Onboarding before the profile write lands.
@@ -42,6 +45,8 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
   const [pet, setPet] = useState<PetState | null>(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
   const [petLoaded, setPetLoaded] = useState(false)
+  const [userDataError, setUserDataError] = useState("")
+  const [retryCount, setRetryCount] = useState(0)
   // Hold the navigator on a spinner while sign-up runs, and until the new
   // profile snapshot (with stats) arrives, so Onboarding never flashes.
   const [isSigningUp, setIsSigningUpState] = useState(false)
@@ -73,18 +78,22 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
     setPet(null)
     setProfileLoaded(false)
     setPetLoaded(false)
+    setUserDataError("")
     if (!user) return
 
+    // A failed load must not look like "no profile" / "no pet": that would send an existing
+    // user to Onboarding or PetSelect, where saving could overwrite their real data.
+    const fail = (what: string) => (e: Error) => {
+      console.warn(`${what} subscription failed:`, e.message)
+      setUserDataError(e.message || `Couldn't load your ${what.toLowerCase()}.`)
+    }
     const unsubProfile = databaseService.subscribeToProfile(
       user.uid,
       (p) => {
         setProfile(p)
         setProfileLoaded(true)
       },
-      (e) => {
-        console.warn("Profile subscription failed:", e.message)
-        setProfileLoaded(true)
-      },
+      fail("Profile"),
     )
     const unsubPet = databaseService.subscribeToPet(
       user.uid,
@@ -92,10 +101,7 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
         setPet(p)
         setPetLoaded(true)
       },
-      (e) => {
-        console.warn("Pet subscription failed:", e.message)
-        setPetLoaded(true)
-      },
+      fail("Pet"),
     )
 
     // Hackathon builds stored the pet inside users/{uid}.pet; move it once.
@@ -107,7 +113,9 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
       unsubProfile()
       unsubPet()
     }
-  }, [user])
+  }, [user, retryCount])
+
+  const retryUserData = useCallback(() => setRetryCount((n) => n + 1), [])
 
   const logout = useCallback(async () => {
     await cancelReminders().catch(() => {})
@@ -120,7 +128,9 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
       isAuthenticated: !!user,
       profile,
       pet,
-      isUserDataLoading: !!user && (!profileLoaded || !petLoaded),
+      isUserDataLoading: !!user && !userDataError && (!profileLoaded || !petLoaded),
+      userDataError,
+      retryUserData,
       isSigningUp: isSigningUp || awaitingProfile,
       setIsSigningUp,
       logout,
@@ -131,6 +141,8 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
       pet,
       profileLoaded,
       petLoaded,
+      userDataError,
+      retryUserData,
       isSigningUp,
       awaitingProfile,
       setIsSigningUp,

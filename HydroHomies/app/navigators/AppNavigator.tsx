@@ -6,15 +6,18 @@
  *   ready                 -> Home, ScanBottle, Leaderboard, Friends, Stats, Reminders, FriendPet
  * Changing state (e.g. adopting a pet) swaps the stack automatically.
  */
-import { ActivityIndicator, View, ViewStyle } from "react-native"
+import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
 
+import { Button } from "@/components/Button"
+import { Text } from "@/components/Text"
 import Config from "@/config"
 import { useAuth } from "@/context/AuthContext"
 import { ErrorBoundary } from "@/screens/ErrorScreen/ErrorBoundary"
 import { FriendPetScreen } from "@/screens/FriendPetScreen"
 import { FriendsScreen } from "@/screens/FriendsScreen"
+import { HistoryScreen } from "@/screens/HistoryScreen"
 import { HomeScreen } from "@/screens/HomeScreen"
 import { LeaderboardScreen } from "@/screens/LeaderboardScreen"
 import { LoginScreen } from "@/screens/LoginScreen"
@@ -35,10 +38,30 @@ const exitRoutes = Config.exitRoutes
 const Stack = createNativeStackNavigator<AppStackParamList>()
 
 const AppStack = () => {
-  const { isAuthenticated, profile, pet, isUserDataLoading, isSigningUp } = useAuth()
+  const {
+    isAuthenticated,
+    profile,
+    pet,
+    isUserDataLoading,
+    isSigningUp,
+    userDataError,
+    retryUserData,
+    logout,
+  } = useAuth()
   const {
     theme: { colors },
   } = useAppTheme()
+
+  if (isAuthenticated && userDataError) {
+    return (
+      <View style={[$loading, $gap, { backgroundColor: colors.background }]}>
+        <Text preset="subheading" text="Couldn't load your account" style={$center} />
+        <Text size="sm" text={userDataError} style={[$center, { color: colors.textDim }]} />
+        <Button text="Try again" preset="reversed" onPress={retryUserData} />
+        <Button text="Log out" onPress={() => logout()} />
+      </View>
+    )
+  }
 
   if (isAuthenticated && (isUserDataLoading || isSigningUp)) {
     return (
@@ -74,6 +97,7 @@ const AppStack = () => {
           <Stack.Screen name="Stats" component={StatsScreen} />
           <Stack.Screen name="Reminders" component={RemindersScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="History" component={HistoryScreen} />
           <Stack.Screen name="FriendPet" component={FriendPetScreen} />
         </>
       )}
@@ -97,3 +121,5 @@ export const AppNavigator = (props: NavigationProps) => {
 }
 
 const $loading: ViewStyle = { flex: 1, alignItems: "center", justifyContent: "center" }
+const $gap: ViewStyle = { gap: 12, padding: 24 }
+const $center: TextStyle = { textAlign: "center" }

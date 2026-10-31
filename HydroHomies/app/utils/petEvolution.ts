@@ -37,7 +37,8 @@ export function isPetSpecies(value: unknown): value is PetSpecies {
 }
 
 export function xpForWater(waterMl: number): number {
-  return Math.max(0, Math.floor((waterMl / 100) * XP_PER_100ML))
+  // Integer math so firestore.rules can reproduce it exactly: floor(ml / 10)
+  return Math.max(0, Math.floor((Math.round(waterMl) * XP_PER_100ML) / 100))
 }
 
 export function levelForXp(experience: number): number {

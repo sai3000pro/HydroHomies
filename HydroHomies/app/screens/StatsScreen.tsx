@@ -9,7 +9,7 @@ import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import { databaseService, type DailySummary } from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { fromDateKey, toDateKey } from "@/utils/dateKey"
+import { fromDateKey } from "@/utils/dateKey"
 import {
   bestStreak,
   computeAchievements,
@@ -20,6 +20,7 @@ import {
   type DayStat,
 } from "@/utils/hydrationStats"
 import { useFriends } from "@/utils/useFriends"
+import { useToday } from "@/utils/useToday"
 
 interface StatsScreenProps extends AppStackScreenProps<"Stats"> {}
 
@@ -35,24 +36,26 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
 
   const [history, setHistory] = useState<DailySummary[] | null>(null)
   const [error, setError] = useState("")
+  const today = useToday()
 
   const loadHistory = useCallback(() => {
     databaseService
-      .getSummaryHistory(profile.uid, HISTORY_DAYS)
+      .getSummaryHistory(profile.uid, HISTORY_DAYS, today)
       .then((h) => {
         setHistory(h)
         setError("")
       })
       .catch((e) => setError(e?.message ?? "Couldn't load your history."))
-  }, [profile.uid])
+  }, [profile.uid, today])
 
-  // Loads on first view and again whenever the screen comes back into view
+  // Loads on first view, whenever the screen comes back into view, and at midnight
   useEffect(() => navigation.addListener("focus", loadHistory), [navigation, loadHistory])
+  useEffect(loadHistory, [loadHistory])
 
   const goalMl = profile.stats?.dailyWaterGoal ?? 2500
   const days = useMemo(
-    () => (history ? fillDays(history, toDateKey(), HISTORY_DAYS, goalMl) : []),
-    [history, goalMl],
+    () => (history ? fillDays(history, today, HISTORY_DAYS, goalMl) : []),
+    [history, goalMl, today],
   )
   const week = useMemo(() => summarizeWeek(days), [days])
   const achievements = useMemo(
@@ -61,9 +64,21 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
         days,
         petExperience: pet?.experience ?? 0,
         friendCount: friends?.length ?? 0,
+        earned: profile.achievements,
       }),
-    [days, pet?.experience, friends?.length],
+    [days, pet?.experience, friends?.length, profile.achievements],
   )
+
+  // Remember newly earned achievements, so they stay unlocked after the streak ages out
+  useEffect(() => {
+    if (history === null || friends === null) return
+    const fresh = achievements
+      .filter((a) => a.unlocked && !profile.achievements.includes(a.id))
+      .map((a) => a.id)
+    databaseService
+      .saveAchievements(profile.uid, fresh)
+      .catch((e) => console.warn("Couldn't save achievements:", e?.message))
+  }, [achievements, history, friends, profile.achievements, profile.uid])
   const unlocked = achievements.filter((a) => a.unlocked).length
   const chartMax = Math.max(goalMl, ...week.days.map((d) => d.totalMl), 1)
   const { palette } = theme.colors
@@ -95,12 +110,7 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
                 style={[themed($goalLine), { bottom: (goalMl / chartMax) * CHART_HEIGHT + 16 }]}
               />
               {week.days.map((d) => (
-                <DayBar
-                  key={d.dateKey}
-                  day={d}
-                  max={chartMax}
-                  isToday={d.dateKey === toDateKey()}
-                />
+                <DayBar key={d.dateKey} day={d} max={chartMax} isToday={d.dateKey === today} />
               ))}
             </View>
             <Text
@@ -149,7 +159,7 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
             <Text
               size="xs"
               style={themed($dim)}
-              text={`Streaks count the last ${HISTORY_DAYS} days. Lifetime litres come from your pet's XP.`}
+              text="Streaks count the last 60 days. Lifetime litres come from your pet's XP. Achievements stay unlocked once earned."
             />
           </View>
         </>

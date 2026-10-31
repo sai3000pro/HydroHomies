@@ -29,17 +29,25 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
 
 const STORAGE_KEY = "reminders.v1"
 const CHANNEL_ID = "reminders"
-/** Days ahead to schedule. iOS keeps at most 64 pending notifications. */
-const DAYS_AHEAD = 3
+/** Days ahead to schedule, so reminders keep coming if the app isn't opened for a while */
+const DAYS_AHEAD = 7
+/** iOS keeps at most 64 pending notifications; stay under it */
+const MAX_PENDING = 60
 
 export const remindersSupported = Platform.OS !== "web"
 
-export function loadReminderSettings(): ReminderSettings {
-  return { ...DEFAULT_REMINDER_SETTINGS, ...(load<Partial<ReminderSettings>>(STORAGE_KEY) ?? {}) }
+// Settings are per user, so a different account on the same phone starts fresh
+const keyFor = (userId: string) => `${STORAGE_KEY}.${userId}`
+
+export function loadReminderSettings(userId: string): ReminderSettings {
+  return {
+    ...DEFAULT_REMINDER_SETTINGS,
+    ...(load<Partial<ReminderSettings>>(keyFor(userId)) ?? {}),
+  }
 }
 
-export function saveReminderSettings(settings: ReminderSettings) {
-  save(STORAGE_KEY, settings)
+export function saveReminderSettings(userId: string, settings: ReminderSettings) {
+  save(keyFor(userId), settings)
 }
 
 /** Times to remind, after `now`. Skips the rest of today if the goal is already reached. */
@@ -54,9 +62,16 @@ export function reminderTimes(
     for (let h = settings.startHour; h <= settings.endHour; h += settings.intervalHours) {
       const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, h, 0, 0, 0)
       if (t > now) times.push(t)
+      if (times.length >= MAX_PENDING) return times
     }
   }
   return times
+}
+
+/** Whether notifications are currently allowed in the OS settings */
+export async function hasReminderPermission(): Promise<boolean> {
+  if (!remindersSupported) return false
+  return (await Notifications.getPermissionsAsync()).granted
 }
 
 let handlerSet = false
@@ -102,11 +117,27 @@ export async function cancelReminders() {
   if (remindersSupported) await Notifications.cancelAllScheduledNotificationsAsync()
 }
 
+// Calls run one at a time; overlapping cancel-then-schedule runs would leave duplicates
+let queue: Promise<unknown> = Promise.resolve()
+
 /** Replaces all scheduled reminders. Safe to call often. */
-export async function syncReminders(petName: string, goalReachedToday: boolean): Promise<number> {
+export function syncReminders(
+  userId: string,
+  petName: string,
+  goalReachedToday: boolean,
+): Promise<number> {
+  const run = queue.then(
+    () => doSync(userId, petName, goalReachedToday),
+    () => doSync(userId, petName, goalReachedToday),
+  )
+  queue = run.catch(() => {})
+  return run
+}
+
+async function doSync(userId: string, petName: string, goalReachedToday: boolean) {
   if (!remindersSupported) return 0
   await Notifications.cancelAllScheduledNotificationsAsync()
-  const settings = loadReminderSettings()
+  const settings = loadReminderSettings(userId)
   if (!settings.enabled) return 0
   if (!(await Notifications.getPermissionsAsync()).granted) return 0
   await prepare()
