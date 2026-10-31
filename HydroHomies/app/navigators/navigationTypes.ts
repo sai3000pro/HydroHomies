@@ -14,6 +14,7 @@ export type AppStackParamList = {
   Friends: undefined
   Stats: undefined
   Reminders: undefined
+  Settings: undefined
   FriendPet: {
     userId: string
     displayName: string

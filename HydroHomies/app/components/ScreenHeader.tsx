@@ -1,5 +1,6 @@
 import { FC, ReactNode } from "react"
 import { Pressable, TextStyle, View, ViewStyle } from "react-native"
+import { useNavigation } from "@react-navigation/native"
 
 import { Text } from "@/components/Text"
 import { useAppTheme } from "@/theme/context"
@@ -17,11 +18,14 @@ interface ScreenHeaderProps {
 /** Title row used by every screen pushed on top of Home */
 export const ScreenHeader: FC<ScreenHeaderProps> = ({ title, subtitle, onBack, right }) => {
   const { themed } = useAppTheme()
+  const navigation = useNavigation()
+  // After a browser refresh on a sub-screen there's nothing to go back to, so go Home instead
+  const back = () => (navigation.canGoBack() ? onBack?.() : navigation.navigate("Home"))
   return (
     <View style={themed($container)}>
       {onBack && (
         <Pressable
-          onPress={onBack}
+          onPress={back}
           accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={12}

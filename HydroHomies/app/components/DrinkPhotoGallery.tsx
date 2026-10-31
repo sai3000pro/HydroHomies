@@ -12,7 +12,14 @@ import {
 
 import { Button } from "@/components/Button"
 import { Text } from "@/components/Text"
-import { databaseService, type DrinkPhotos } from "@/services/firebase/database"
+import { useSignedInUser } from "@/context/AuthContext"
+import {
+  databaseService,
+  REACTION_EMOJIS,
+  type DrinkPhotos,
+  type Reaction,
+  type ReactionEmoji,
+} from "@/services/firebase/database"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { confirmAction, notify } from "@/utils/confirm"
@@ -87,6 +94,7 @@ export const DrinkPhotoGallery: FC<DrinkPhotoGalleryProps> = ({ userId, displayN
               <Photo uri={p.before} label="Before" onPress={() => setZoomed(p.before)} />
               <Photo uri={p.after} label="After" onPress={() => setZoomed(p.after)} />
             </View>
+            <Reactions entryId={p.entryId} isMe={isMe} />
             {isMe && (
               <Button
                 text="Delete photos"
@@ -99,7 +107,11 @@ export const DrinkPhotoGallery: FC<DrinkPhotoGalleryProps> = ({ userId, displayN
         ))
       )}
       {!isMe && error !== "denied" && (photos?.length ?? 0) > 0 && (
-        <Text size="xs" style={themed($dim)} text="Suspicious? Tell them about it. 😏" />
+        <Text
+          size="xs"
+          style={themed($dim)}
+          text="Bottle didn't really go down? Hit them with a 🧢 or a 🤡."
+        />
       )}
 
       <Modal
@@ -116,6 +128,76 @@ export const DrinkPhotoGallery: FC<DrinkPhotoGalleryProps> = ({ userId, displayN
           {zoomed && <Image source={{ uri: zoomed }} style={$zoomImage} />}
         </Pressable>
       </Modal>
+    </View>
+  )
+}
+
+const REACTION_LABELS: Record<ReactionEmoji, string> = {
+  "💧": "Hydrated",
+  "🔥": "On fire",
+  "🤡": "Clown",
+  "🧢": "Cap (fake)",
+}
+
+/**
+ * Reaction bar for one drink. Friends tap to react (tap again to remove);
+ * the owner sees the counts and who reacted.
+ */
+const Reactions: FC<{ entryId: string; isMe: boolean }> = ({ entryId, isMe }) => {
+  const { themed, theme } = useAppTheme()
+  const { profile } = useSignedInUser()
+  const [reactions, setReactions] = useState<Reaction[]>([])
+
+  useEffect(
+    () => databaseService.subscribeToReactions(entryId, setReactions, () => setReactions([])),
+    [entryId],
+  )
+
+  const mine = reactions.find((r) => r.userId === profile.uid)?.emoji ?? null
+
+  function toggle(emoji: ReactionEmoji) {
+    databaseService
+      .setReaction(entryId, profile, mine === emoji ? null : emoji)
+      .catch((e) => notify("Couldn't react", e?.message ?? String(e)))
+  }
+
+  const names = reactions.map((r) => `${r.emoji} ${r.displayName}`).join("   ")
+
+  return (
+    <View style={themed($gapXs)}>
+      <View style={themed($reactionRow)}>
+        {REACTION_EMOJIS.map((emoji) => {
+          const count = reactions.filter((r) => r.emoji === emoji).length
+          if (isMe && count === 0) return null
+          const selected = mine === emoji
+          return (
+            <Pressable
+              key={emoji}
+              disabled={isMe}
+              onPress={() => toggle(emoji)}
+              accessibilityRole="button"
+              accessibilityLabel={`${REACTION_LABELS[emoji]}, ${count}`}
+              accessibilityState={{ selected, disabled: isMe }}
+              style={[
+                themed($chip),
+                selected && {
+                  borderColor: theme.colors.palette.water500,
+                  backgroundColor: theme.colors.palette.water100,
+                },
+              ]}
+            >
+              <Text
+                size="xs"
+                text={count > 0 ? `${emoji} ${count}` : emoji}
+                style={selected ? $chipTextSelected : undefined}
+              />
+            </Pressable>
+          )
+        })}
+      </View>
+      {isMe && reactions.length > 0 && (
+        <Text size="xxs" style={themed($dim)} text={names} numberOfLines={2} />
+      )}
     </View>
   )
 }
@@ -194,3 +276,25 @@ const $smallButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
+
+const $gapXs: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.xxs })
+
+const $reactionRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: spacing.xs,
+})
+
+const $chip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  minWidth: 44,
+  minHeight: 36,
+  alignItems: "center",
+  justifyContent: "center",
+  paddingHorizontal: spacing.sm,
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+})
+
+// Selected chips use a light blue background in both themes, so keep the text dark
+const $chipTextSelected: TextStyle = { color: "#00439C", fontWeight: "bold" }

@@ -63,12 +63,17 @@ service cloud.firestore {
         // New pets start at 0; pets migrated from the hackathon build keep their small XP
         && request.resource.data.experience >= 0
         && request.resource.data.experience <= 1000;
-      // XP can only grow, and by at most what one maximum-size drink earns (3000 ml -> 300 XP)
+      // XP moves by at most what one maximum-size drink earns (3000 ml -> 300 XP):
+      // up when logging, down when undoing a drink. Renaming is allowed.
       allow update: if isOwner(uid)
         && request.resource.data.userId == uid
         && request.resource.data.species == resource.data.species
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
         && request.resource.data.experience is int
-        && request.resource.data.experience >= resource.data.experience
+        && request.resource.data.experience >= 0
+        && request.resource.data.experience >= resource.data.experience - 300
         && request.resource.data.experience <= resource.data.experience + 300
         && request.resource.data.health >= 0
         && request.resource.data.health <= 100;
@@ -83,7 +88,12 @@ service cloud.firestore {
         && isMl(request.resource.data.amount)
         && request.resource.data.amount > 0
         && request.resource.data.dateKey is string;
-      allow update, delete: if false;
+      // Undo: the owner can delete a drink within 24 hours of logging it
+      allow delete: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.timestamp is timestamp
+        && request.time < resource.data.timestamp + duration.value(1, 'd');
+      allow update: if false;
     }
 
     // One doc per user per day, id "{uid}_{YYYY-MM-DD}". Public: it drives the leaderboard.
@@ -95,8 +105,9 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && summaryId == request.auth.uid + '_' + request.resource.data.dateKey
         && request.resource.data.totalMl is int
-        // Each write adds one drink of at most 3000 ml
-        && request.resource.data.totalMl >= prevTotal()
+        // Each write adds one drink of at most 3000 ml, or removes one (undoing a mistake)
+        && request.resource.data.totalMl >= 0
+        && request.resource.data.totalMl >= prevTotal() - 3000
         && request.resource.data.totalMl <= prevTotal() + 3000;
       allow delete: if false;
     }
@@ -121,6 +132,27 @@ service cloud.firestore {
       // You can take your photos down, but not edit them
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if false;
+
+      // drinkPhotos/{entryId}/reactions/{uid}: one emoji reaction per viewer
+      match /reactions/{reactorId} {
+        function photoOwner() {
+          return get(/databases/$(database)/documents/drinkPhotos/$(entryId)).data.userId;
+        }
+        function canSee() {
+          return photoOwner() == request.auth.uid || isFriendOf(photoOwner());
+        }
+        allow read: if signedIn() && canSee();
+        allow create, update: if signedIn()
+          && reactorId == request.auth.uid
+          && canSee()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.emoji in ['💧', '🔥', '🤡', '🧢']
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() <= 24;
+        // The reactor can take it back; the photo owner can clear it when deleting the photos
+        allow delete: if signedIn()
+          && (reactorId == request.auth.uid || photoOwner() == request.auth.uid);
+      }
     }
 
     // aiUsage/{uid}_{day}: written only by the estimateBottle function (Admin SDK).

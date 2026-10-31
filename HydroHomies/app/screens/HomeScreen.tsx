@@ -1,35 +1,38 @@
-import { FC, useEffect, useState } from "react"
-import { TextStyle, View, ViewStyle } from "react-native"
+import { FC, useCallback, useEffect, useState } from "react"
+import { Pressable, TextStyle, View, ViewStyle } from "react-native"
 
 import { ActionTile } from "@/components/ActionTile"
 import { Button } from "@/components/Button"
 import { Pet } from "@/components/Pet"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { useAuth, useSignedInUser } from "@/context/AuthContext"
+import { useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
 import {
   databaseService,
+  UNDO_WINDOW_MS,
   type DailySummary,
   type HydrationEntry,
 } from "@/services/firebase/database"
 import { syncReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { confirmAction } from "@/utils/confirm"
+import { confirmAction, notify } from "@/utils/confirm"
+import { toDateKey } from "@/utils/dateKey"
+import { currentStreak, fillDays, HISTORY_DAYS } from "@/utils/hydrationStats"
+import { xpForWater } from "@/utils/petEvolution"
 import { calculateProgress, shouldFlagOverdrinking } from "@/utils/waterGoalCalculator"
 
 interface HomeScreenProps extends AppStackScreenProps<"Home"> {}
 
 const SOURCE_LABEL: Record<HydrationEntry["source"], string> = {
-  "ai": "AI estimate",
-  "on-device": "On-device model",
-  "manual": "Entered by hand",
+  "ai": "AI",
+  "on-device": "On-device",
+  "manual": "By hand",
 }
 
 export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const { themed, theme } = useAppTheme()
-  const { logout } = useAuth()
   const { profile, pet } = useSignedInUser()
 
   const [summary, setSummary] = useState<DailySummary | null>(null)
@@ -69,11 +72,51 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
   const remaining = Math.max(0, dailyGoal - todayIntake)
   const { palette } = theme.colors
 
+  // Streak: recomputed when today's total changes and whenever Home comes back into view
+  const [streak, setStreak] = useState(0)
+  const loadStreak = useCallback(() => {
+    databaseService
+      .getSummaryHistory(profile.uid, HISTORY_DAYS)
+      .then((h) => setStreak(currentStreak(fillDays(h, toDateKey(), HISTORY_DAYS, dailyGoal))))
+      .catch(() => {})
+  }, [profile.uid, dailyGoal])
+  useEffect(() => navigation.addListener("focus", loadStreak), [navigation, loadStreak])
+  useEffect(loadStreak, [loadStreak, todayIntake])
+
+  async function undo(entry: HydrationEntry) {
+    const ok = await confirmAction(
+      `Delete this ${entry.amount} ml drink?`,
+      pet
+        ? `It comes off today's total and ${pet.name} loses the ${xpForWater(entry.amount)} XP it earned.`
+        : "It comes off today's total.",
+      "Delete",
+    )
+    if (!ok) return
+    databaseService
+      .deleteDrink(profile, entry.id)
+      .catch((e) => notify("Couldn't delete", e?.message ?? String(e)))
+  }
+
   return (
     <Screen preset="scroll" contentContainerStyle={themed($container)} safeAreaEdges={["top"]}>
       <View style={themed($header)}>
         <Text preset="heading" text="HydroHype 💧" style={$title} numberOfLines={1} />
-        <Text style={themed($dim)} text={`Welcome back, ${profile.username || "friend"}!`} />
+        <View style={themed($welcomeRow)}>
+          <Text
+            style={[themed($dim), $flexShrink]}
+            numberOfLines={1}
+            text={`Welcome back, ${profile.username || "friend"}!`}
+          />
+          {streak > 0 && (
+            <View
+              style={themed($streakChip)}
+              accessible
+              accessibilityLabel={`${streak} day streak`}
+            >
+              <Text size="xs" preset="bold" style={$streakText} text={`🔥 ${streak}-day streak`} />
+            </View>
+          )}
+        </View>
       </View>
 
       {pet && (
@@ -147,6 +190,12 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
           }
         />
         <ActionTile emoji="⏰" label="Reminders" onPress={() => navigation.navigate("Reminders")} />
+        <ActionTile
+          emoji="⚙️"
+          label="Settings"
+          wide
+          onPress={() => navigation.navigate("Settings")}
+        />
       </View>
 
       {!!loadError && (
@@ -156,34 +205,46 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
       {entries.length > 0 && (
         <View style={themed($card)}>
           <Text preset="subheading" text="Today's Drinks" style={themed($sectionTitle)} />
-          {entries.map((entry, i) => (
-            <View key={entry.id} style={[themed($entryRow), i === entries.length - 1 && $lastRow]}>
-              <View>
-                <Text preset="bold" text={`${entry.amount} ml`} />
-                <Text size="xs" text={SOURCE_LABEL[entry.source]} style={themed($dim)} />
+          {entries.map((entry, i) => {
+            const canUndo =
+              !!entry.timestamp && Date.now() - entry.timestamp.getTime() < UNDO_WINDOW_MS
+            return (
+              <View
+                key={entry.id}
+                style={[themed($entryRow), i === entries.length - 1 && $lastRow]}
+              >
+                <View style={$flexShrink}>
+                  <Text preset="bold" text={`${entry.amount} ml`} />
+                  <Text
+                    size="xs"
+                    style={themed($dim)}
+                    text={`${
+                      entry.timestamp
+                        ? entry.timestamp.toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : "Saving…"
+                    } · ${SOURCE_LABEL[entry.source]}`}
+                    numberOfLines={1}
+                  />
+                </View>
+                {canUndo && (
+                  <Pressable
+                    onPress={() => undo(entry)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${entry.amount} millilitre drink`}
+                    hitSlop={8}
+                    style={({ pressed }) => [themed($undo), pressed && $pressed]}
+                  >
+                    <Text size="xs" text="Delete" style={themed($undoText)} />
+                  </Pressable>
+                )}
               </View>
-              <Text
-                size="xs"
-                text={
-                  entry.timestamp
-                    ? entry.timestamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-                    : "Saving…"
-                }
-                style={themed($dim)}
-              />
-            </View>
-          ))}
+            )
+          })}
         </View>
       )}
-
-      <Button
-        text="Log out"
-        onPress={async () => {
-          if (await confirmAction("Log out?", "You can log back in any time.", "Log out")) logout()
-        }}
-        style={themed($logout)}
-        textStyle={themed($logoutText)}
-      />
     </Screen>
   )
 }
@@ -191,22 +252,42 @@ export const HomeScreen: FC<HomeScreenProps> = ({ navigation }) => {
 const $centered: ViewStyle = { alignItems: "center" }
 const $title: TextStyle = { fontSize: 34, lineHeight: 42 }
 const $lastRow: ViewStyle = { borderBottomWidth: 0 }
+const $flexShrink: ViewStyle = { flexShrink: 1 }
+const $pressed: ViewStyle = { opacity: 0.6 }
+// The chip is light orange in both themes
+const $streakText: TextStyle = { color: "#6B4A00" }
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
+  paddingBottom: spacing.xxl,
   gap: spacing.lg,
 })
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({ gap: spacing.xxs })
 
-const $logout: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  minHeight: 44,
-  borderWidth: 0,
-  backgroundColor: "transparent",
-  marginBottom: spacing.lg,
+const $welcomeRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: spacing.sm,
 })
 
-const $logoutText: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.textDim })
+const $streakChip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  backgroundColor: colors.palette.accent100,
+  paddingHorizontal: spacing.sm,
+  paddingVertical: spacing.xxxs,
+  borderRadius: 12,
+})
+
+const $undo: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+  paddingHorizontal: spacing.sm,
+  paddingVertical: spacing.xxs,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+})
+
+const $undoText: ThemedStyle<TextStyle> = ({ colors }) => ({ color: colors.error })
 
 const $logButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({ marginTop: spacing.md })
 

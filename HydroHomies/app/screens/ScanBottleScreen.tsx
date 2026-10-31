@@ -33,7 +33,7 @@ import { clamp, consumedVolume, MAX_BOTTLE_ML, type ScanPhase } from "@/services
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { notify } from "@/utils/confirm"
-import { xpForWater } from "@/utils/petEvolution"
+import { levelForXp, stageForLevel, xpForWater } from "@/utils/petEvolution"
 
 interface ScanBottleScreenProps extends AppStackScreenProps<"ScanBottle"> {}
 
@@ -45,6 +45,23 @@ interface Reading extends BottleReading {
 }
 
 const STEP_ML = 50
+
+/** "500 ml. Zap gained 50 XP." plus a level-up or new-stage line when it happens */
+function celebration(pet: { name: string; experience: number } | null, amount: number): string {
+  if (!pet) return `${amount} ml.`
+  const gained = xpForWater(amount)
+  const before = levelForXp(pet.experience)
+  const after = levelForXp(pet.experience + gained)
+  let text = `${amount} ml. ${pet.name} gained ${gained} XP.`
+  if (after > before) {
+    const stage = stageForLevel(after)
+    text +=
+      stage !== stageForLevel(before)
+        ? `\n\n🎉 ${pet.name} grew into a ${stage}! (Level ${after})`
+        : `\n\n⭐ ${pet.name} reached level ${after}!`
+  }
+  return text
+}
 
 const SOURCE_TEXT: Record<EstimateSource, string> = {
   "ai": "AI estimate",
@@ -68,6 +85,9 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) requestPermission()
   }, [permission, requestPermission])
+
+  // After a browser refresh on this screen there's no Home underneath to go back to
+  const leave = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))
 
   const phase: ScanPhase = step === "after" ? "after" : "before"
   const current = phase === "before" ? before : after
@@ -169,13 +189,8 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
           photoNote = ` Photos weren't shared: ${e?.message ?? "upload failed"}.`
         }
       }
-      navigation.goBack()
-      notify(
-        "Logged! 💧",
-        (pet
-          ? `${loggedAmount} ml. ${pet.name} gained ${xpForWater(loggedAmount)} XP.`
-          : `${loggedAmount} ml.`) + photoNote,
-      )
+      leave()
+      notify("Logged! 💧", celebration(pet, loggedAmount) + photoNote)
     } catch (e: any) {
       setIsBusy(false)
       notify("Couldn't log drink", e?.message ?? "Please try again.")
@@ -202,7 +217,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
           <Text text="HydroHype uses the camera to estimate how much water is in your bottle." />
           <Button text="Grant permission" preset="reversed" onPress={requestPermission} />
           <Button text="Choose from gallery instead" onPress={pickPhoto} />
-          <Button text="Cancel" onPress={() => navigation.goBack()} />
+          <Button text="Cancel" onPress={() => leave()} />
         </Screen>
       )
     }
@@ -241,7 +256,7 @@ export const ScanBottleScreen: FC<ScanBottleScreenProps> = ({ navigation }) => {
             <Button
               text={phase === "after" ? "Back" : "Cancel"}
               onPress={() =>
-                phase === "after" ? (setStep("before"), setCapturing(false)) : navigation.goBack()
+                phase === "after" ? (setStep("before"), setCapturing(false)) : leave()
               }
               style={$flex}
             />

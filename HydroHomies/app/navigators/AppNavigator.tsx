@@ -22,6 +22,7 @@ import { OnboardingScreen } from "@/screens/OnboardingScreen"
 import { PetSelectScreen } from "@/screens/PetSelectScreen"
 import { RemindersScreen } from "@/screens/RemindersScreen"
 import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
+import { SettingsScreen } from "@/screens/SettingsScreen"
 import { SignUpScreen } from "@/screens/SignUpScreen"
 import { StatsScreen } from "@/screens/StatsScreen"
 import { useAppTheme } from "@/theme/context"
@@ -72,6 +73,7 @@ const AppStack = () => {
           <Stack.Screen name="Friends" component={FriendsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
           <Stack.Screen name="Reminders" component={RemindersScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="FriendPet" component={FriendPetScreen} />
         </>
       )}

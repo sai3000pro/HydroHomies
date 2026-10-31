@@ -46,9 +46,10 @@ The app is wired to the `hydrohype-9fa73` project (see `.firebaserc`). To use yo
 | `friendCodes` | 6-character code | signed-in users, by exact code only | the code's owner and display name |
 | `users/{uid}/friends` | friend's uid | owner | friend's display name. Adding a friend writes both users' lists |
 | `drinkPhotos` | the drink's entry id | owner and their friends | before/after JPEG thumbnails (data URIs, ~30-60 KB per pair) |
+| `drinkPhotos/{id}/reactions` | reactor's uid | owner and their friends | one emoji per friend: 💧 🔥 🤡 🧢 |
 | `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting (only used by the Cloud Function) |
 
-Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`).
+Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`). Deleting one (Home → Today's Drinks → Delete, allowed for 24 hours) reverses all three and removes its photos (`databaseService.deleteDrink`). The rules let a daily total or pet XP move by at most one drink's worth per write, up or down.
 
 **Friends.** Each user gets a friend code the first time they open Friends. Entering someone's code adds you to each other's lists. The rules only allow that write if the code really belongs to the other user, so nobody can add themselves without the code. Either friend can remove the friendship. The leaderboard has a Friends tab (you plus your friends) and an Everyone tab.
 

@@ -10,11 +10,13 @@ import {
 } from "@firebase/rules-unit-testing"
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   type Firestore,
@@ -172,9 +174,14 @@ describe("adoptPet (pets/{uid})", () => {
     })
     const db = actAs("alice")
     await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 401 }))
-    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 50 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: -1 }))
     await assertFails(updateDoc(doc(db, "pets/alice"), { species: "elephant" }))
-    await assertSucceeds(updateDoc(doc(db, "pets/alice"), { experience: 400 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { name: "" }))
+    await assertSucceeds(updateDoc(doc(db, "pets/alice"), { experience: 50 }))
+    await assertSucceeds(updateDoc(doc(db, "pets/alice"), { experience: 350 }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { experience: 49 }))
+    await assertSucceeds(databaseService.renamePet("alice", "Splash"))
+    expect((await read("pets/alice"))?.name).toBe("Splash")
   })
 })
 
@@ -296,14 +303,18 @@ describe("logHydration", () => {
     )
   })
 
-  it("blocks inflating the daily total by more than one drink", async () => {
+  it("blocks changing the daily total by more than one drink", async () => {
     const db = actAs("alice")
     const dateKey = toDateKey()
     const ref = doc(db, "dailySummaries", dailySummaryId("alice", dateKey))
     await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 3001 }))
     await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 3000 }))
     await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 6001 }))
-    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 10 }))
+    await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 6000 }))
+    // Undoing one drink can lower it by at most 3000, and never below 0
+    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: 2999 }))
+    await assertSucceeds(setDoc(ref, { userId: "alice", dateKey, totalMl: 3000 }))
+    await assertFails(setDoc(ref, { userId: "alice", dateKey, totalMl: -1 }))
   })
 
   it("keeps drinks private to their owner", async () => {
@@ -614,5 +625,99 @@ describe("drink photos", () => {
     await assertFails(databaseService.deleteDrinkPhotos(entryId))
     actAs("alice")
     await assertSucceeds(databaseService.deleteDrinkPhotos(entryId))
+  })
+})
+
+describe("undoing a drink", () => {
+  it("removes the entry, its photos, the daily total and the XP it earned", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
+    await logDrink("alice", 500)
+    const second = await logDrink("alice", 1000)
+    await databaseService.saveDrinkPhotos({
+      userId: "alice",
+      entryId: second.entryId,
+      amount: 1000,
+      dateKey: second.dateKey,
+      before: "data:image/jpeg;base64,/9j/AAAA",
+      after: "data:image/jpeg;base64,/9j/AAAA",
+    })
+    await seed("users/alice/friends/bob", { friendId: "bob", displayName: "bob" })
+    actAs("bob")
+    await databaseService.setReaction(second.entryId, profileFor("bob"), "🧢")
+
+    actAs("alice")
+    await assertSucceeds(databaseService.deleteDrink(profileFor("alice"), second.entryId))
+    expect(await read(`hydrationEntries/${second.entryId}`)).toBeUndefined()
+    expect(await read(`drinkPhotos/${second.entryId}`)).toBeUndefined()
+    expect(await read(`drinkPhotos/${second.entryId}/reactions/bob`)).toBeUndefined()
+    expect(await read(dailySummaryPath("alice"))).toMatchObject({ totalMl: 500, entryCount: 1 })
+    expect((await read("pets/alice"))?.experience).toBe(50)
+  })
+
+  it("blocks deleting someone else's drink or one older than 24 hours", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const logged = await logDrink("alice", 300)
+    actAs("mallory")
+    await assertFails(deleteDoc(doc(actAs("mallory"), "hydrationEntries", logged.entryId)))
+
+    await seed("hydrationEntries/old", {
+      userId: "alice",
+      dateKey: "2000-01-01",
+      amount: 300,
+      timestamp: Timestamp.fromMillis(Date.now() - 25 * 60 * 60 * 1000),
+    })
+    await assertFails(deleteDoc(doc(actAs("alice"), "hydrationEntries", "old")))
+  })
+})
+
+describe("reactions on drink photos", () => {
+  async function alicePhotos() {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const logged = await logDrink("alice", 300)
+    await databaseService.saveDrinkPhotos({
+      userId: "alice",
+      entryId: logged.entryId,
+      amount: 300,
+      dateKey: logged.dateKey,
+      before: "data:image/jpeg;base64,/9j/AAAA",
+      after: "data:image/jpeg;base64,/9j/AAAA",
+    })
+    await seed("users/alice/friends/bob", { friendId: "bob", displayName: "bob" })
+    return logged.entryId
+  }
+
+  it("lets friends react, change and remove their reaction", async () => {
+    const entryId = await alicePhotos()
+    actAs("bob")
+    await assertSucceeds(databaseService.setReaction(entryId, profileFor("bob"), "🤡"))
+    await assertSucceeds(databaseService.setReaction(entryId, profileFor("bob"), "🔥"))
+    expect((await read(`drinkPhotos/${entryId}/reactions/bob`))?.emoji).toBe("🔥")
+    await assertSucceeds(databaseService.setReaction(entryId, profileFor("bob"), null))
+    expect(await read(`drinkPhotos/${entryId}/reactions/bob`)).toBeUndefined()
+  })
+
+  it("blocks strangers, other emojis and reacting as someone else", async () => {
+    const entryId = await alicePhotos()
+    actAs("mallory")
+    await assertFails(databaseService.setReaction(entryId, profileFor("mallory"), "🤡"))
+    const db = actAs("bob")
+    await assertFails(
+      setDoc(doc(db, "drinkPhotos", entryId, "reactions", "bob"), {
+        userId: "bob",
+        emoji: "💩",
+        displayName: "bob",
+      }),
+    )
+    await assertFails(
+      setDoc(doc(db, "drinkPhotos", entryId, "reactions", "carol"), {
+        userId: "bob",
+        emoji: "🤡",
+        displayName: "bob",
+      }),
+    )
   })
 })

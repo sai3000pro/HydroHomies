@@ -19,6 +19,10 @@ Setup and architecture: [HydroHomies/SETUP.md](./HydroHomies/SETUP.md). Code map
 - **Achievements.** 12 achievements on the Stats screen (first drink, goal, 3/7/30-day streaks, 10 L and 100 L lifetime, pet level 5/15/30, 1 and 5 friends), with progress bars. Computed on the device; nothing stored.
 - **Reminders.** Local notifications every 1-4 hours within a chosen time window, titled with the pet's name. Today's remaining reminders are dropped once the goal is reached. Cleared on logout.
 - **Drink photo gallery.** Before/after thumbnails of each drink show on your profile (Home → My profile) for you and your friends only, so friends can call out faked drinks. Optional per drink, deletable. Stored in Firestore because Cloud Storage needs Blaze.
+- **Reactions.** Friends react to each drink's photos with 💧 🔥 🤡 or 🧢 (cap = "that's fake"). Tap again to take it back. You see who reacted.
+- **Undo a drink.** Home → Today's Drinks → Delete, within 24 hours. Takes it off the daily total and leaderboard, removes the XP it earned, and deletes its photos.
+- **Settings.** Edit username and body stats (the daily goal preview updates as you type), rename your pet, pick Auto/Light/Dark theme, log out.
+- **Little rewards.** A 🔥 streak chip on Home, and the "Logged!" message announces level-ups and new pet stages.
 - **Local testing.** `npm run emulators` plus `EXPO_PUBLIC_USE_FIREBASE_EMULATORS=1` runs the whole app against local emulators (see SETUP.md).
 - **Rules tests.** `npm run test:rules` runs the real `databaseService` against the Firestore emulator: 38 tests over profiles, pets, migration, drinks, friends, drink photos, history and both leaderboards.
 
@@ -37,7 +41,7 @@ Run these from `HydroHomies/`:
 | `npm run compile` | 0 errors |
 | `npm run lint:check` | clean |
 | `npm test` | 7 suites, 32 tests pass |
-| `npm run test:rules` | 38 tests pass in the emulator |
+| `npm run test:rules` | 42 tests pass in the emulator |
 | `npx expo export --platform android` | bundles |
 
 `npm run test:rules` needs **Java 21+**. The system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `jdk-21.0.13+9-jre\bin` folder on `PATH` in that terminal first.
@@ -45,7 +49,7 @@ Run these from `HydroHomies/`:
 ## Next steps
 
 1. **Add the OpenRouter key.** Copy `HydroHomies/.env.example` to `HydroHomies/.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. Set a monthly spending limit on the key in OpenRouter, because it's in the app bundle and there's no per-user rate limit without the Cloud Function.
-2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. The new rules (friends, friend codes, drink photos) and the new history and photo indexes are needed by this version. Stats and the photo gallery fail until the indexes finish building.
+2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. This version needs the new rules (friends, friend codes, drink photos, reactions, undo, pet rename) and the history and photo indexes. Stats and the photo gallery fail until the indexes finish building.
 3. **Rebuild the dev build and test on a device** (`npm run android`). `expo-notifications` is a new native module. Check: sign-up → pet → scan → leaderboard, adding a friend from a second account, the Stats screen, a reminder arriving, the camera, legacy-pet migration, and whether `bundleResourceIO` loads the model on device.
 4. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
 

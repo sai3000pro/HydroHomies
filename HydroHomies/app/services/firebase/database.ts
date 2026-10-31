@@ -30,7 +30,7 @@ import {
 } from "firebase/firestore"
 
 import { dailySummaryId, shiftDateKey, toDateKey } from "@/utils/dateKey"
-import { feedPet, isPetSpecies, type PetSpecies } from "@/utils/petEvolution"
+import { feedPet, isPetSpecies, xpForWater, type PetSpecies } from "@/utils/petEvolution"
 import { calculateDailyWaterGoal, type UserStats } from "@/utils/waterGoalCalculator"
 
 import { db } from "./config"
@@ -103,6 +103,19 @@ export interface DrinkPhotos {
   after: string
   createdAt: Date | null
 }
+
+/** Allowed reactions on drink photos. Mirrors firestore.rules. */
+export const REACTION_EMOJIS = ["💧", "🔥", "🤡", "🧢"] as const
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number]
+
+export interface Reaction {
+  userId: string
+  emoji: ReactionEmoji
+  displayName: string
+}
+
+/** How long after logging a drink it can still be deleted. Mirrors firestore.rules. */
+export const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /** Letters and digits that can't be confused with each other (no O/0, I/1) */
 const FRIEND_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -373,6 +386,66 @@ export const databaseService = {
     })
   },
 
+  /**
+   * Undoes a logged drink (within UNDO_WINDOW_MS): removes the entry and its photos,
+   * subtracts it from that day's summary, and takes back the XP it earned.
+   */
+  async deleteDrink(profile: UserProfile, entryId: string) {
+    const uid = profile.uid
+    const entryRef = doc(db, "hydrationEntries", entryId)
+    const photosRef = doc(db, "drinkPhotos", entryId)
+    const petRef = doc(db, "pets", uid)
+
+    // Reactions live in a subcollection a transaction can't query; clear them first
+    const photosSnap = await getDoc(photosRef).catch(() => null)
+    if (photosSnap?.exists()) await databaseService.deleteDrinkPhotos(entryId)
+
+    await runTransaction(db, async (tx) => {
+      const entrySnap = await tx.get(entryRef)
+      if (!entrySnap.exists()) throw new Error("That drink was already deleted.")
+      const entry = parseEntry(entryId, entrySnap.data())
+      if (entry.userId !== uid) throw new Error("That isn't your drink.")
+      if (entry.timestamp && Date.now() - entry.timestamp.getTime() > UNDO_WINDOW_MS) {
+        throw new Error("Drinks can only be deleted within 24 hours.")
+      }
+
+      const summaryRef = doc(db, "dailySummaries", dailySummaryId(uid, entry.dateKey))
+      const summarySnap = await tx.get(summaryRef)
+      const petSnap = await tx.get(petRef)
+
+      tx.delete(entryRef)
+      if (summarySnap.exists()) {
+        const s = parseSummary(summarySnap.data())
+        const xpBack = xpForWater(entry.amount)
+        tx.update(summaryRef, {
+          totalMl: Math.max(0, s.totalMl - entry.amount),
+          entryCount: Math.max(0, s.entryCount - 1),
+          petExperience: Math.max(0, s.petExperience - xpBack),
+          updatedAt: serverTimestamp(),
+        })
+      }
+      if (petSnap.exists()) {
+        const pet = parsePet(uid, petSnap.data())
+        tx.update(petRef, {
+          experience: Math.max(0, Math.round(pet.experience) - xpForWater(entry.amount)),
+          updatedAt: serverTimestamp(),
+        })
+      }
+    })
+  },
+
+  async renamePet(userId: string, name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 20) throw new Error("Pet names are 1 to 20 characters.")
+    await setDoc(
+      doc(db, "pets", userId),
+      { name: trimmed, updatedAt: serverTimestamp() },
+      {
+        merge: true,
+      },
+    )
+  },
+
   subscribeToTodayEntries(
     userId: string,
     cb: (entries: HydrationEntry[]) => void,
@@ -423,7 +496,12 @@ export const databaseService = {
       orderBy("totalMl", "desc"),
       limit(limitCount),
     )
-    return onSnapshot(q, (snap) => cb(snap.docs.map((d) => parseSummary(d.data()))), onError)
+    return onSnapshot(
+      q,
+      // Drinks that were all undone leave a 0 ml summary behind; keep those off the board
+      (snap) => cb(snap.docs.map((d) => parseSummary(d.data())).filter((s) => s.totalMl > 0)),
+      onError,
+    )
   },
 
   /**
@@ -453,7 +531,7 @@ export const databaseService = {
           where("userId", "in", chunk),
         ),
         (snap) => {
-          results[i] = snap.docs.map((d) => parseSummary(d.data()))
+          results[i] = snap.docs.map((d) => parseSummary(d.data())).filter((s) => s.totalMl > 0)
           // Wait until every chunk has answered once, so the list doesn't flicker
           if (results.every((r) => r !== undefined)) {
             cb(results.flatMap((r) => r ?? []).sort((a, b) => b.totalMl - a.totalMl))
@@ -506,7 +584,47 @@ export const databaseService = {
   },
 
   async deleteDrinkPhotos(entryId: string) {
+    // Clear reactions first; the rules let the photo owner remove them
+    const reactions = await getDocs(collection(db, "drinkPhotos", entryId, "reactions"))
+    if (!reactions.empty) {
+      const batch = writeBatch(db)
+      reactions.docs.forEach((r) => batch.delete(r.ref))
+      await batch.commit()
+    }
     await deleteDoc(doc(db, "drinkPhotos", entryId))
+  },
+
+  // ---------- Reactions ----------
+
+  subscribeToReactions(
+    entryId: string,
+    cb: (reactions: Reaction[]) => void,
+    onError?: (e: Error) => void,
+  ): Unsubscribe {
+    return onSnapshot(
+      collection(db, "drinkPhotos", entryId, "reactions"),
+      (snap) =>
+        cb(
+          snap.docs.map((d) => ({
+            userId: d.id,
+            emoji: d.data().emoji,
+            displayName: d.data().displayName || "Someone",
+          })),
+        ),
+      onError,
+    )
+  },
+
+  /** Sets your reaction on a drink's photos, or removes it if `emoji` is null */
+  async setReaction(entryId: string, profile: UserProfile, emoji: ReactionEmoji | null) {
+    const ref = doc(db, "drinkPhotos", entryId, "reactions", profile.uid)
+    if (emoji === null) return deleteDoc(ref)
+    await setDoc(ref, {
+      userId: profile.uid,
+      emoji,
+      displayName: (profile.username || "Anonymous").slice(0, 24),
+      createdAt: serverTimestamp(),
+    })
   },
 
   /**

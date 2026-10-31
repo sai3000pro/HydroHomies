@@ -54,12 +54,10 @@ export const LeaderboardScreen: FC<LeaderboardScreenProps> = ({ navigation }) =>
       <Pressable
         style={[themed($row), isMe && { borderColor: theme.colors.palette.water500 }]}
         onPress={() =>
-          isMe
-            ? navigation.navigate("Home")
-            : navigation.navigate("FriendPet", {
-                userId: item.userId,
-                displayName: item.displayName,
-              })
+          navigation.navigate("FriendPet", {
+            userId: item.userId,
+            displayName: item.displayName,
+          })
         }
         accessibilityRole="button"
         accessibilityLabel={`Rank ${index + 1}, ${item.displayName}, ${item.totalMl} millilitres`}
