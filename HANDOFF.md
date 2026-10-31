@@ -1,36 +1,34 @@
 # Handoff: HydroHype revival
 
-The hackathon app has been refactored so the pieces actually connect, and the planned features are built. Everything below was verified locally. **Nothing has been deployed to Firebase, and nothing has been run on a phone yet.**
+The hackathon app is now a working app: the pieces connect, the planned features are built, and a full audit's worth of bugs and gaps are fixed. Everything below was verified locally: unit tests, 57 Firestore rules tests against the emulator, and click-through testing in Expo web against local emulators. **Nothing has been deployed to Firebase, and nothing has been run on a phone yet.**
 
 The project stays on the free **Spark** plan. Nothing here needs Blaze.
 
 Setup and architecture: [HydroHomies/SETUP.md](./HydroHomies/SETUP.md). Code map: [HydroHomies/README.md](./HydroHomies/README.md).
 
-## What changed
+## Features
 
-- **One data model.** The pet lives in `pets/{uid}` with separate `species` and `experience` fields. Old pets at `users/{uid}.pet` are migrated on sign-in. All Firestore access goes through `app/services/firebase/database.ts`.
-- **Auth.** `AuthContext` subscribes live to the profile and the pet. The navigator routes on state (signed out → Login, no stats → Onboarding, no pet → PetSelect, otherwise Home). The sign-up race that could wipe stats is fixed, and logout was added.
-- **Scan flow.** You take a before photo and an after photo, and the app logs the difference. Every value can be edited. Logging writes the entry, the pet XP/health and the daily summary in one transaction.
-- **AI estimate.** With `EXPO_PUBLIC_OPENROUTER_API_KEY` in `HydroHomies/.env`, the app calls OpenRouter directly. That works on Spark. The optional `estimateBottle` Cloud Function in `HydroHomies/functions/` is only used when that variable is unset. There is no `.env` on this machine yet; copy `HydroHomies/.env.example`.
-- **On-device model.** The Keras 3 export couldn't load in tfjs. `scripts/patch-keras3-model.js` fixes it, and `npm run model:verify` confirms it loads and predicts.
-- **Friends.** Each user has a 6-character friend code (Friends screen, with a Share button). Entering a code adds you to each other's lists. The rules check that the code belongs to the other user.
-- **Leaderboard.** Friends and Everyone tabs, built from `dailySummaries`, live. Avatars now show each pet's current health (fade when thirsty).
-- **Stats.** Last 7 days as a bar chart against the goal, weekly total and average, days on goal, best day, current and best streak.
-- **Achievements.** 12 achievements on the Stats screen (first drink, goal, 3/7/30-day streaks, 10 L and 100 L lifetime, pet level 5/15/30, 1 and 5 friends), with progress bars. Computed on the device; nothing stored.
-- **Reminders.** Local notifications every 1-4 hours within a chosen time window, titled with the pet's name. Today's remaining reminders are dropped once the goal is reached. Cleared on logout.
-- **Drink photo gallery.** Before/after thumbnails of each drink show on your profile (Home → My profile) for you and your friends only, so friends can call out faked drinks. Optional per drink, deletable. Stored in Firestore because Cloud Storage needs Blaze.
-- **Reactions.** Friends react to each drink's photos with 💧 🔥 🤡 or 🧢 (cap = "that's fake"). Tap again to take it back. You see who reacted.
-- **Undo a drink.** Home → Today's Drinks → Delete, within 24 hours. Takes it off the daily total and leaderboard, removes the XP it earned, and deletes its photos.
-- **Settings.** Edit username and body stats (the daily goal preview updates as you type), rename your pet, pick Auto/Light/Dark theme, log out.
-- **Little rewards.** A 🔥 streak chip on Home, and the "Logged!" message announces level-ups and new pet stages.
-- **Local testing.** `npm run emulators` plus `EXPO_PUBLIC_USE_FIREBASE_EMULATORS=1` runs the whole app against local emulators (see SETUP.md).
-- **Rules tests.** `npm run test:rules` runs the real `databaseService` against the Firestore emulator: 38 tests over profiles, pets, migration, drinks, friends, drink photos, history and both leaderboards.
+- **Sign-up and accounts.** Email and password sign-up with body stats, which set the daily water goal. Log in, log out, **forgot password** (emails a reset link), and **delete account** (Settings; asks for the password, then deletes the profile, pet, drinks, photos, reactions, friendships and friend code, then the sign-in account). If a deletion is interrupted, the app offers to finish it on the next sign-in.
+- **Pet.** Pick one of three species and name it. It gains 10 XP per 100 ml, levels up every 100 XP, grows through five stages, and gets thirsty when you don't drink. You can rename it in Settings.
+- **Logging a drink.** Take a before and an after photo; the app estimates both and logs the difference. Every value can be edited. The "Logged!" message announces level-ups and new stages. The drink, pet and daily total update in one transaction.
+- **AI estimate.** With `EXPO_PUBLIC_OPENROUTER_API_KEY` in `HydroHomies/.env`, the app calls OpenRouter directly (works on Spark). Without a key it falls back straight to the on-device model or manual entry; it no longer waits on a Cloud Function that can't exist on Spark. There is no `.env` on this machine yet; copy `HydroHomies/.env.example`.
+- **Undo and history.** Delete a drink within 24 hours from Home or from the new **Drinks** history (Home → "See all drinks"), which lists your last 30 by day. Undo takes back the ml, the XP and the health boost, and removes the drink's photos.
+- **Friends.** Each user has a 6-character friend code (share or copy it). Entering a code adds you to each other's lists. **Get a new code** retires the old one if it got out. Removing a friend works from either side.
+- **Drink photo gallery and reactions.** Before/after thumbnails of each drink show on your profile, for you and your friends only, so they can call out fakes with 💧 🔥 🤡 🧢. Photo sharing is optional per drink, and photos are deletable.
+- **Leaderboard.** Friends and Everyone tabs, live. Shows each pet's current health. Tells you if you're outside the top 50.
+- **Stats and achievements.** Last 7 days against your goal, totals, best day, current and best streak, and 12 achievements. Achievements are now saved, so they never lock again.
+- **Reminders.** Local notifications every 1-4 hours in a time window, named after your pet, scheduled a week ahead (within iOS's 64-notification limit). Today's remaining reminders stop once you hit your goal. Settings are per user, and the app tells you if notifications are turned off in the phone's settings.
+- **Settings.** Username and body stats (the goal updates live), pet name, theme (Auto/Light/Dark), log out, delete account. A new username also updates your friend code, your friends' lists and today's leaderboard row.
 
-## Verified in the browser (Expo web against the emulators)
+## Fixed in the last round (from a full audit and an independent review)
 
-Two accounts, Alice and Bob: sign-up → pet → log drinks (gallery photos, manual amounts) → Home totals and XP → Stats (chart, numbers, First Sip unlocked) → own profile gallery → Bob adds Alice by code → Bob sees Alice's photos and the Friends/Everyone leaderboards → Bob removes Alice → Alice's photos are then hidden from Bob → deleting your own photos → logout. Found and fixed along the way: confirm dialogs and alerts did nothing on web (`Alert.alert` is a no-op there), and Stats showed 150 ml as "0.1 L".
-
-Not verifiable on web: reminders (web shows a "phones only" message), the on-device model, and the native camera. Those still need a phone.
+- **Midnight.** "Today" now rolls over at midnight and when the app returns to the foreground. Before, a phone left open overnight kept showing yesterday's total, and drinks logged after midnight didn't appear.
+- **Cheating.** The Firestore rules now only let a pet's XP and a day's total change together with a real drink written in the same request, by exactly that drink's amount. Health can only rise by what the drink earns, and decay can't be paused. Leaderboard fields are validated, drinks must carry the server time and a date within a day of today, and a pet can't be deleted and re-created with XP.
+- **Load errors.** A failed or offline profile load used to send existing users to Onboarding or PetSelect, where saving could overwrite their data. It now shows "Couldn't load your account" with Try again.
+- **Undo.** Undo now gives back the health boost too, and a refused undo no longer deletes the photos.
+- **Logging.** A fast double tap on Log no longer logs twice.
+- **Reminders.** Duplicate reminders and reminders scheduled after logout are fixed, and reminder settings carry over from older versions.
+- **Smaller fixes:** the camera permission prompt is asked once, the photo picker reports errors, the friends leaderboard no longer spins forever on an error, two people adding each other at the same moment no longer shows an error, and the crash screen shows a real message (in all 7 languages) instead of developer boilerplate.
 
 ## Current state (all passing)
 
@@ -41,22 +39,26 @@ Run these from `HydroHomies/`:
 | `npm run compile` | 0 errors |
 | `npm run lint:check` | clean |
 | `npm test` | 7 suites, 32 tests pass |
-| `npm run test:rules` | 42 tests pass in the emulator |
+| `npm run test:rules` | 57 tests pass in the emulator |
 | `npx expo export --platform android` | bundles |
 
 `npm run test:rules` needs **Java 21+**. The system Java is 11, so a portable Java 21 runtime is at `%LOCALAPPDATA%\Programs\temurin-21\`. Put its `jdk-21.0.13+9-jre\bin` folder on `PATH` in that terminal first.
 
+**Try the whole app without touching the real project:** `npm run emulators`, then start the app with `EXPO_PUBLIC_USE_FIREBASE_EMULATORS=1` (see SETUP.md). Everything above was click-tested this way in Expo web.
+
 ## Next steps
 
-1. **Add the OpenRouter key.** Copy `HydroHomies/.env.example` to `HydroHomies/.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. Set a monthly spending limit on the key in OpenRouter, because it's in the app bundle and there's no per-user rate limit without the Cloud Function.
-2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. This version needs the new rules (friends, friend codes, drink photos, reactions, undo, pet rename) and the history and photo indexes. Stats and the photo gallery fail until the indexes finish building.
-3. **Rebuild the dev build and test on a device** (`npm run android`). `expo-notifications` is a new native module. Check: sign-up → pet → scan → leaderboard, adding a friend from a second account, the Stats screen, a reminder arriving, the camera, legacy-pet migration, and whether `bundleResourceIO` loads the model on device.
-4. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
+1. **Add the OpenRouter key.** Copy `HydroHomies/.env.example` to `HydroHomies/.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. Set a monthly spending limit on the key in OpenRouter: it's in the app bundle and there's no per-user rate limit without the Cloud Function.
+2. **Deploy rules and indexes** (works on Spark): `npm run deploy:firestore`. This version needs the new rules and indexes (history, photos, recent drinks, reactions). Stats, History and the gallery fail until the indexes finish building (a few minutes).
+3. **Turn on password reset emails.** Firebase console → Authentication → Templates: check the sender name for the password reset email.
+4. **Rebuild the dev build and test on a phone** (`npm run android`). `expo-notifications` is a native module. Check: sign-up → pet → scan with the real camera → leaderboard, a second account adding you, a reminder arriving, and whether `bundleResourceIO` loads the on-device model.
+5. **Run Maestro.** `npm run test:maestro -- -e TEST_EMAIL=... -e TEST_PASSWORD=...` against a test account that has stats and a pet.
 
 ## Known gaps
 
-- Day boundaries use the device's local date (`utils/dateKey.ts`), so "today" matches each user's own calendar. Users in different time zones can appear on each other's leaderboard a few hours early or late. That's on purpose; using UTC would make "today's goal" reset mid-day for most people.
-- The on-device model has no "empty" class, so it's only used for the *before* photo. Retraining needs a dataset of empty and low-level bottle photos, which isn't in the repo (see `ml_training/`).
-- Streaks count the last 60 days only. Lifetime litres are estimated from pet XP (10 XP per 100 ml), so migrated hackathon pets start with whatever XP they had.
-- Anyone who has your friend code can add you. There's no accept step and no way to change your code yet.
-- Hackathon-era `hydrationEntries` have no `dateKey`, so they don't appear in "Today's Drinks". That's harmless.
+- **Logging is honor-system plus photos.** The rules stop editing totals directly, but a determined user can still log made-up drinks through the normal flow. The photo gallery and 🧢 reactions are the check on that; real verification would need a server (Cloud Functions, Blaze).
+- **Time zones.** Day boundaries use each device's local date, so users in different time zones roll over at different times. That's on purpose; UTC would reset "today" mid-day for most people.
+- **On-device model.** It has no "empty" class, so it's only used for the *before* photo. Retraining needs empty and low-level bottle photos, which aren't in the repo (see `ml_training/`).
+- **Friend codes.** Anyone with your code can add you without an accept step. Get a new code if it leaks.
+- **Old usernames.** After a rename, past days' leaderboard rows and reactions you left earlier keep the old name.
+- **Translations.** Most screens are English only; the other 6 languages cover the login and error screens.

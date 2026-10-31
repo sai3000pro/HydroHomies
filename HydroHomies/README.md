@@ -15,7 +15,8 @@ app/
   context/AuthContext.tsx live auth user, profile and pet (Firestore snapshots)
   navigators/             stack switches on auth/profile/pet state
   screens/                Login, SignUp, Onboarding, PetSelect, Home, ScanBottle, Leaderboard,
-                          Friends, Stats (weekly stats + achievements), Reminders, FriendPet
+                          Friends, Stats (weekly stats + achievements), History, Reminders,
+                          Settings, FriendPet (profiles + photo gallery)
   components/             Pet, StatsFields, plus Ignite UI components (Button, Text, Screen, ...)
   services/firebase/      config, auth, database (every Firestore read and write)
   services/vision/        AI estimate client, estimate parsing, analyzeBottle fallback chain

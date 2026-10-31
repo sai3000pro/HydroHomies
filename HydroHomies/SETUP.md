@@ -49,15 +49,17 @@ The app is wired to the `hydrohype-9fa73` project (see `.firebaserc`). To use yo
 | `drinkPhotos/{id}/reactions` | reactor's uid | owner and their friends | one emoji per friend: 💧 🔥 🤡 🧢 |
 | `aiUsage` | `{uid}_{YYYY-MM-DD}` | nobody (Functions only) | AI estimate counter for rate limiting (only used by the Cloud Function) |
 
-Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`). Deleting one (Home → Today's Drinks → Delete, allowed for 24 hours) reverses all three and removes its photos (`databaseService.deleteDrink`). The rules let a daily total or pet XP move by at most one drink's worth per write, up or down.
+Logging a drink writes the entry, the pet update and the daily summary in one transaction (`databaseService.logHydration`). Deleting one (Delete on Home or in History, offered for 24 hours) reverses all three, including the health boost, and then removes its photos (`databaseService.deleteDrink`).
+
+**Anti-cheat rules.** Each pet and summary write carries `lastEntryId`. The rules use `getAfter`/`existsAfter` to require that this id is a drink created (or deleted) in the same write. XP must change by exactly `floor(ml / 10)`, the day's total by exactly the drink's ml, and health by at most what the drink earns. New drinks must have the server timestamp and a date within a day of today. Display-only fields (username, pet name) can change on their own. Account deletion first sets `users/{uid}.deleting`, which lets the owner remove drinks without the per-drink checks; the app finishes an interrupted deletion on next sign-in.
 
 **Friends.** Each user gets a friend code the first time they open Friends. Entering someone's code adds you to each other's lists. The rules only allow that write if the code really belongs to the other user, so nobody can add themselves without the code. Either friend can remove the friendship. The leaderboard has a Friends tab (you plus your friends) and an Everyone tab.
 
 **Drink photos.** When "Share photos with friends" is on (the default, remembered per device), logging a drink also saves small thumbnails of the before and after photos. They show on your profile (Home → My profile) and on the profile your friends see, so they can call you out if the bottle didn't really go down. You can delete any pair. Photos live in Firestore rather than Cloud Storage, because Storage needs the Blaze plan. The free Firestore quota is 1 GiB, which is roughly 20,000 drinks with photos.
 
-**Stats and achievements** are computed on the device from the last 60 days of `dailySummaries` and the pet's XP. Nothing extra is stored. The history query needs the `(userId, dateKey)` index in `firestore.indexes.json`, so run `npm run deploy:firestore` after pulling this.
+**Stats and achievements** are computed on the device from the last 60 days of `dailySummaries` and the pet's XP. Earned achievement ids are saved on the profile (`users/{uid}.achievements`) so they stay unlocked. The queries need the indexes in `firestore.indexes.json`, so run `npm run deploy:firestore` after pulling this.
 
-**Reminders** are local notifications (`expo-notifications`); no server is involved. They're scheduled for the next 3 days and refreshed whenever Home opens. Once today's goal is reached, the rest of today's reminders are dropped. Settings are stored on the device.
+**Reminders** are local notifications (`expo-notifications`); no server is involved. They're scheduled for the next 7 days (at most 60, under iOS's limit of 64) and refreshed whenever Home opens. Once today's goal is reached, the rest of today's reminders are dropped. Settings are stored on the device, per user.
 
 Accounts created by the hackathon build stored the pet at `users/{uid}.pet`. It's moved to `pets/{uid}` automatically the next time that user signs in.
 
@@ -88,7 +90,7 @@ The scan screen sends each photo to a vision model on [OpenRouter](https://openr
 
 **Direct (default, works on the free Spark plan).** Copy `.env.example` to `.env` and set `EXPO_PUBLIC_OPENROUTER_API_KEY`. The app calls OpenRouter itself. The key is embedded in the app bundle and there's no per-user rate limit, so set a monthly spending limit on the key in OpenRouter. Restart `npm start` after editing `.env`. To change the model, set `EXPO_PUBLIC_OPENROUTER_MODEL` (default `google/gemini-2.5-flash`).
 
-**Cloud Function (needs the Blaze plan).** Leave `EXPO_PUBLIC_OPENROUTER_API_KEY` unset and deploy `functions/`. The `estimateBottle` function keeps the key on the server and allows each user 60 calls per day (each scan uses two).
+**Cloud Function (needs the Blaze plan).** Leave `EXPO_PUBLIC_OPENROUTER_API_KEY` unset, set `EXPO_PUBLIC_USE_ESTIMATE_FUNCTION=1`, and deploy `functions/`. The `estimateBottle` function keeps the key on the server and allows each user 60 calls per day (each scan uses two). Without the flag the app doesn't try the function at all, so photos aren't held up waiting for a call that can't succeed.
 
 ```bash
 npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project hydrohype-9fa73

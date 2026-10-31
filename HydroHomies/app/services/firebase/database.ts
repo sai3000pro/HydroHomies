@@ -52,6 +52,8 @@ export interface UserProfile {
   friendCode?: string
   /** Achievement ids earned so far; kept so they never lock again */
   achievements: string[]
+  /** Set while the account is being deleted; an interrupted deletion can be finished later */
+  deleting: boolean
 }
 
 export interface PetState {
@@ -173,6 +175,7 @@ export function parseUserProfile(uid: string, data: DocumentData): UserProfile {
     achievements: Array.isArray(data.achievements)
       ? data.achievements.filter((a: unknown): a is string => typeof a === "string")
       : [],
+    deleting: data.deleting === true,
   }
 }
 
@@ -415,7 +418,7 @@ export const databaseService = {
     const petRef = doc(db, "pets", uid)
     const goalMl = profile.stats?.dailyWaterGoal ?? 2500
 
-    // Check before touching anything, so a refused undo never loses the photos
+    // Check before touching anything
     const first = await getDoc(entryRef)
     if (!first.exists()) throw new Error("That drink was already deleted.")
     const checked = parseEntry(entryId, first.data())
@@ -423,10 +426,6 @@ export const databaseService = {
     if (checked.timestamp && Date.now() - checked.timestamp.getTime() > UNDO_WINDOW_MS) {
       throw new Error("Drinks can only be deleted within 24 hours.")
     }
-
-    // Reactions live in a subcollection a transaction can't query; clear photos first
-    const photosSnap = await getDoc(photosRef).catch(() => null)
-    if (photosSnap?.exists()) await databaseService.deleteDrinkPhotos(entryId)
 
     await runTransaction(db, async (tx) => {
       const entrySnap = await tx.get(entryRef)
@@ -465,6 +464,15 @@ export const databaseService = {
         })
       }
     })
+
+    // Photos after the drink is gone, so a failed undo never loses them. Reactions live in
+    // a subcollection a transaction can't query. If this fails, the drink is still undone.
+    try {
+      const photosSnap = await getDoc(photosRef)
+      if (photosSnap.exists()) await databaseService.deleteDrinkPhotos(entryId)
+    } catch (e: any) {
+      console.warn("Drink deleted, but its photos couldn't be removed:", e?.message)
+    }
   },
 
   async renamePet(userId: string, name: string) {
@@ -803,7 +811,8 @@ export const databaseService = {
   async regenerateFriendCode(profile: UserProfile): Promise<string> {
     const old = profile.friendCode
     const code = await databaseService.ensureFriendCode({ ...profile, friendCode: undefined })
-    if (old) await deleteDoc(doc(db, "friendCodes", old)).catch(() => {})
+    // The screen promises the old code stops working, so a failure here must surface
+    if (old) await deleteDoc(doc(db, "friendCodes", old))
     return code
   },
 
@@ -845,19 +854,23 @@ export const databaseService = {
 
   /**
    * Deletes everything the user owns: reactions they left, photos, friendships, friend code,
-   * daily summaries, drinks, pet and profile. Call before deleting the auth account.
-   * Order matters for the rules: summaries and the pet go before the drinks.
+   * drinks, daily summaries, pet and profile. Call before deleting the auth account.
+   * Marking the profile as `deleting` first lets the rules skip the per-drink total checks
+   * (everything goes anyway), which keeps big batches within Firestore's limits. Safe to
+   * run again if it stops part-way.
    */
   async deleteAllUserData(profile: UserProfile) {
     const uid = profile.uid
     const commitAll = async (refs: DocumentReference[]) => {
       // A batch holds up to 500 writes
-      for (let i = 0; i < refs.length; i += 450) {
+      for (let i = 0; i < refs.length; i += 400) {
         const batch = writeBatch(db)
-        refs.slice(i, i + 450).forEach((r) => batch.delete(r))
+        refs.slice(i, i + 400).forEach((r) => batch.delete(r))
         await batch.commit()
       }
     }
+
+    await setDoc(doc(db, "users", uid), { deleting: true }, { merge: true })
 
     // Reactions you left on friends' photos
     const myReactions = await getDocs(
@@ -874,19 +887,21 @@ export const databaseService = {
     for (const f of friends.docs) await databaseService.removeFriend(uid, f.id)
 
     if (profile.friendCode) {
-      await deleteDoc(doc(db, "friendCodes", profile.friendCode)).catch(() => {})
+      await deleteDoc(doc(db, "friendCodes", profile.friendCode))
     }
-
-    const summaries = await getDocs(
-      query(collection(db, "dailySummaries"), where("userId", "==", uid)),
-    )
-    await commitAll([...summaries.docs.map((d) => d.ref), doc(db, "pets", uid)])
 
     const entries = await getDocs(
       query(collection(db, "hydrationEntries"), where("userId", "==", uid)),
     )
     await commitAll(entries.docs.map((d) => d.ref))
 
+    const summaries = await getDocs(
+      query(collection(db, "dailySummaries"), where("userId", "==", uid)),
+    )
+    await commitAll(summaries.docs.map((d) => d.ref))
+
+    // Pet and profile last, so an interrupted deletion can simply be retried
+    await deleteDoc(doc(db, "pets", uid))
     await deleteDoc(doc(db, "users", uid))
   },
 

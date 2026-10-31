@@ -9,7 +9,7 @@
 import { Platform } from "react-native"
 import * as Notifications from "expo-notifications"
 
-import { load, save } from "@/utils/storage"
+import { load, remove, save } from "@/utils/storage"
 
 export interface ReminderSettings {
   enabled: boolean
@@ -40,10 +40,17 @@ export const remindersSupported = Platform.OS !== "web"
 const keyFor = (userId: string) => `${STORAGE_KEY}.${userId}`
 
 export function loadReminderSettings(userId: string): ReminderSettings {
-  return {
-    ...DEFAULT_REMINDER_SETTINGS,
-    ...(load<Partial<ReminderSettings>>(keyFor(userId)) ?? {}),
+  let saved = load<Partial<ReminderSettings>>(keyFor(userId))
+  if (!saved) {
+    // Older versions kept one device-wide setting; adopt it for this user once
+    const legacy = load<Partial<ReminderSettings>>(STORAGE_KEY)
+    if (legacy) {
+      saved = legacy
+      save(keyFor(userId), legacy)
+      remove(STORAGE_KEY)
+    }
   }
+  return { ...DEFAULT_REMINDER_SETTINGS, ...(saved ?? {}) }
 }
 
 export function saveReminderSettings(userId: string, settings: ReminderSettings) {
@@ -112,13 +119,22 @@ const MESSAGES = [
   "Quick water break?",
 ]
 
-/** Cancels every scheduled reminder (e.g. on logout). Settings are kept. */
-export async function cancelReminders() {
-  if (remindersSupported) await Notifications.cancelAllScheduledNotificationsAsync()
-}
-
 // Calls run one at a time; overlapping cancel-then-schedule runs would leave duplicates
 let queue: Promise<unknown> = Promise.resolve()
+
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+  const run = queue.then(job, job)
+  queue = run.catch(() => {})
+  return run
+}
+
+/** Cancels every scheduled reminder (e.g. on logout). Settings are kept. */
+export function cancelReminders(): Promise<void> {
+  // Queued, so a sync that's already running can't reschedule after logout
+  return enqueue(async () => {
+    if (remindersSupported) await Notifications.cancelAllScheduledNotificationsAsync()
+  })
+}
 
 /** Replaces all scheduled reminders. Safe to call often. */
 export function syncReminders(
@@ -126,12 +142,7 @@ export function syncReminders(
   petName: string,
   goalReachedToday: boolean,
 ): Promise<number> {
-  const run = queue.then(
-    () => doSync(userId, petName, goalReachedToday),
-    () => doSync(userId, petName, goalReachedToday),
-  )
-  queue = run.catch(() => {})
-  return run
+  return enqueue(() => doSync(userId, petName, goalReachedToday))
 }
 
 async function doSync(userId: string, petName: string, goalReachedToday: boolean) {

@@ -20,6 +20,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type Firestore,
 } from "firebase/firestore"
 import { readFileSync } from "fs"
@@ -919,5 +920,162 @@ describe("renaming", () => {
       /No one/,
     )
     await expect(databaseService.addFriendByCode(profileFor("bob"), newCode)).resolves.toBe("alice")
+  })
+})
+
+describe("loopholes found in review", () => {
+  it("blocks deleting and re-creating a pet to get XP", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    await databaseService.adoptPet("alice", "alice", "alien", "Zap")
+    const db = actAs("alice")
+    await assertFails(deleteDoc(doc(db, "pets/alice")))
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await deleteDoc(doc(ctx.firestore() as unknown as Firestore, "pets/alice"))
+    })
+    await assertFails(
+      setDoc(doc(db, "pets/alice"), {
+        userId: "alice",
+        species: "sphele",
+        name: "X",
+        experience: 1000,
+        health: 100,
+      }),
+    )
+  })
+
+  it("blocks planting a fake legacy pet to migrate", async () => {
+    await seed("users/alice", { username: "alice" })
+    const db = actAs("alice")
+    await assertFails(
+      setDoc(doc(db, "users/alice"), { pet: { type: "alien", currentXp: 1000 } }, { merge: true }),
+    )
+  })
+
+  it("blocks a tiny drink from fully healing the pet", async () => {
+    await seed("users/alice", { username: "alice", stats: { ...stats, dailyWaterGoal: 2500 } })
+    await seed("pets/alice", {
+      userId: "alice",
+      species: "alien",
+      name: "Zap",
+      experience: 0,
+      health: 10,
+    })
+    const db = actAs("alice")
+    const entry = doc(collection(db, "hydrationEntries"))
+    const batch = writeBatch(db)
+    batch.set(entry, {
+      userId: "alice",
+      dateKey: toDateKey(),
+      amount: 10,
+      timestamp: serverTimestamp(),
+    })
+    batch.update(doc(db, "pets/alice"), {
+      experience: 1,
+      health: 100,
+      lastFed: serverTimestamp(),
+      lastEntryId: entry.id,
+    })
+    await assertFails(batch.commit())
+  })
+
+  it("blocks pausing health decay or faking health without a drink", async () => {
+    await seed("pets/alice", {
+      userId: "alice",
+      species: "alien",
+      name: "Zap",
+      experience: 100,
+      health: 30,
+      lastFed: Timestamp.fromMillis(Date.now() - 10 * 3_600_000),
+    })
+    const db = actAs("alice")
+    await assertFails(updateDoc(doc(db, "pets/alice"), { lastFed: serverTimestamp() }))
+    await assertFails(updateDoc(doc(db, "pets/alice"), { health: 100 }))
+  })
+
+  it("undoes a drink from yesterday against yesterday's total", async () => {
+    await seed("users/alice", { username: "alice" })
+    const yesterday = new Date(Date.now() - 86_400_000)
+    const ymd = toDateKey(yesterday)
+    // A drink logged late yesterday (seeded: the rules only accept new drinks dated near today)
+    await seed("hydrationEntries/late", {
+      userId: "alice",
+      dateKey: ymd,
+      amount: 400,
+      timestamp: Timestamp.fromMillis(Date.now() - 60 * 60 * 1000),
+    })
+    await seed(`dailySummaries/alice_${ymd}`, {
+      userId: "alice",
+      dateKey: ymd,
+      displayName: "alice",
+      totalMl: 900,
+      goalMl: 2500,
+      entryCount: 2,
+      petName: null,
+      petSpecies: null,
+      petExperience: 0,
+      petHealth: 100,
+    })
+    actAs("alice")
+    await assertSucceeds(databaseService.deleteDrink(profileFor("alice"), "late"))
+    expect(await read(`dailySummaries/alice_${ymd}`)).toMatchObject({
+      totalMl: 500,
+      entryCount: 1,
+    })
+  })
+
+  it("can still undo when the day's total is already below the drink", async () => {
+    await seed("users/alice", { username: "alice" })
+    actAs("alice")
+    const logged = await logDrink("alice", 800)
+    // Simulate inconsistent stored data
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore() as unknown as Firestore, dailySummaryPath("alice")), {
+        totalMl: 300,
+      })
+    })
+    actAs("alice")
+    await assertSucceeds(databaseService.deleteDrink(profileFor("alice"), logged.entryId))
+    expect((await read(dailySummaryPath("alice")))?.totalMl).toBe(0)
+  })
+
+  it("deletes an account with drinks spread over many days", async () => {
+    await seed("users/alice", { username: "alice" })
+    await seed("pets/alice", {
+      userId: "alice",
+      species: "alien",
+      name: "Zap",
+      experience: 500,
+      health: 80,
+    })
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore
+      for (let d = 0; d < 30; d++) {
+        const key = toDateKey(new Date(Date.now() - d * 86_400_000))
+        await setDoc(doc(db, `hydrationEntries/old-${d}`), {
+          userId: "alice",
+          dateKey: key,
+          amount: 100,
+          timestamp: Timestamp.fromMillis(Date.now() - d * 86_400_000),
+        })
+        await setDoc(doc(db, `dailySummaries/alice_${key}`), {
+          userId: "alice",
+          dateKey: key,
+          displayName: "alice",
+          totalMl: 100,
+          goalMl: 2500,
+          entryCount: 1,
+          petName: "Zap",
+          petSpecies: "alien",
+          petExperience: 500,
+          petHealth: 80,
+        })
+      }
+    })
+    actAs("alice")
+    await assertSucceeds(databaseService.deleteAllUserData(profileFor("alice")))
+    expect(await read("users/alice")).toBeUndefined()
+    expect(await read("pets/alice")).toBeUndefined()
+    expect(await read("hydrationEntries/old-29")).toBeUndefined()
   })
 })

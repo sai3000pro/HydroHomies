@@ -14,12 +14,11 @@ import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 import { useAuth, useSignedInUser } from "@/context/AuthContext"
 import type { AppStackScreenProps } from "@/navigators/navigationTypes"
-import { authService, describeAuthError } from "@/services/firebase/auth"
+import { describeAuthError } from "@/services/firebase/auth"
 import { databaseService } from "@/services/firebase/database"
-import { cancelReminders } from "@/services/reminders"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-import { confirmAction } from "@/utils/confirm"
+import { confirmAction, notify } from "@/utils/confirm"
 import { toDateKey } from "@/utils/dateKey"
 import { loadString } from "@/utils/storage"
 
@@ -32,7 +31,7 @@ const THEME_STORAGE_KEY = "ignite.themeScheme"
 
 export const SettingsScreen: FC<SettingsScreenProps> = ({ navigation }) => {
   const { themed, theme, setThemeContextOverride } = useAppTheme()
-  const { logout } = useAuth()
+  const { logout, deleteAccount: deleteMyAccount } = useAuth()
   const { profile, pet } = useSignedInUser()
 
   const s = profile.stats
@@ -97,14 +96,12 @@ export const SettingsScreen: FC<SettingsScreenProps> = ({ navigation }) => {
     if (!ok) return
     setIsDeleting(true)
     try {
-      // Check the password first, so a typo doesn't leave the data half-deleted
-      await authService.reauthenticate(deletePassword)
-      await cancelReminders().catch(() => {})
-      await databaseService.deleteAllUserData(profile)
-      // Signs out automatically; the navigator returns to Login
-      await authService.deleteCurrentUser()
+      await deleteMyAccount(deletePassword)
     } catch (e: any) {
-      setDeleteError(describeAuthError(e))
+      // The navigator may have moved on (e.g. to "Finish deleting"), so also show an alert
+      const message = describeAuthError(e)
+      setDeleteError(message)
+      notify("Couldn't delete your account", message)
       setIsDeleting(false)
     }
   }

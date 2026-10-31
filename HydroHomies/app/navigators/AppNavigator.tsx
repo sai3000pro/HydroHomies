@@ -6,12 +6,14 @@
  *   ready                 -> Home, ScanBottle, Leaderboard, Friends, Stats, Reminders, FriendPet
  * Changing state (e.g. adopting a pet) swaps the stack automatically.
  */
+import { useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
 
 import { Button } from "@/components/Button"
 import { Text } from "@/components/Text"
+import { TextField } from "@/components/TextField"
 import Config from "@/config"
 import { useAuth } from "@/context/AuthContext"
 import { ErrorBoundary } from "@/screens/ErrorScreen/ErrorBoundary"
@@ -28,6 +30,7 @@ import { ScanBottleScreen } from "@/screens/ScanBottleScreen"
 import { SettingsScreen } from "@/screens/SettingsScreen"
 import { SignUpScreen } from "@/screens/SignUpScreen"
 import { StatsScreen } from "@/screens/StatsScreen"
+import { describeAuthError } from "@/services/firebase/auth"
 import { useAppTheme } from "@/theme/context"
 
 import type { AppStackParamList, NavigationProps } from "./navigationTypes"
@@ -47,6 +50,7 @@ const AppStack = () => {
     userDataError,
     retryUserData,
     logout,
+    isDeletingAccount,
   } = useAuth()
   const {
     theme: { colors },
@@ -62,6 +66,17 @@ const AppStack = () => {
       </View>
     )
   }
+
+  if (isAuthenticated && isDeletingAccount) {
+    return (
+      <View style={[$loading, $gap, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.tint} />
+        <Text text="Deleting your account…" />
+      </View>
+    )
+  }
+
+  if (isAuthenticated && profile?.deleting) return <FinishDeletion />
 
   if (isAuthenticated && (isUserDataLoading || isSigningUp)) {
     return (
@@ -120,6 +135,42 @@ export const AppNavigator = (props: NavigationProps) => {
   )
 }
 
+/** Shown when an earlier account deletion stopped part-way (app closed, network dropped) */
+const FinishDeletion = () => {
+  const { deleteAccount, logout } = useAuth()
+  const {
+    theme: { colors },
+  } = useAppTheme()
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  return (
+    <View style={[$loading, $gap, { backgroundColor: colors.background }]}>
+      <Text preset="subheading" text="Finish deleting your account" style={$center} />
+      <Text
+        size="sm"
+        style={[$center, { color: colors.textDim }]}
+        text="Your account deletion didn't finish. Enter your password to complete it."
+      />
+      <TextField
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoCapitalize="none"
+        containerStyle={$wide}
+      />
+      <Button
+        text="Delete my account"
+        preset="reversed"
+        onPress={() => deleteAccount(password).catch((e) => setError(describeAuthError(e)))}
+      />
+      <Button text="Log out" onPress={() => logout()} />
+      {!!error && <Text size="sm" style={[$center, { color: colors.error }]} text={error} />}
+    </View>
+  )
+}
+
 const $loading: ViewStyle = { flex: 1, alignItems: "center", justifyContent: "center" }
+const $wide: ViewStyle = { alignSelf: "stretch" }
 const $gap: ViewStyle = { gap: 12, padding: 24 }
 const $center: TextStyle = { textAlign: "center" }

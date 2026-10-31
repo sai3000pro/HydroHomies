@@ -1,4 +1,4 @@
-import { FC, useCallback, useEffect, useMemo, useState } from "react"
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
 
 import { Screen } from "@/components/Screen"
@@ -37,20 +37,29 @@ export const StatsScreen: FC<StatsScreenProps> = ({ navigation }) => {
   const [history, setHistory] = useState<DailySummary[] | null>(null)
   const [error, setError] = useState("")
   const today = useToday()
+  const latestRequest = useRef(0)
 
   const loadHistory = useCallback(() => {
+    // Only the newest request may update the screen (e.g. after midnight)
+    const id = ++latestRequest.current
     databaseService
       .getSummaryHistory(profile.uid, HISTORY_DAYS, today)
       .then((h) => {
+        if (id !== latestRequest.current) return
         setHistory(h)
         setError("")
       })
-      .catch((e) => setError(e?.message ?? "Couldn't load your history."))
+      .catch((e) => {
+        if (id === latestRequest.current) setError(e?.message ?? "Couldn't load your history.")
+      })
   }, [profile.uid, today])
 
-  // Loads on first view, whenever the screen comes back into view, and at midnight
+  // Loads when the screen comes into view, and again when the day changes while it's open
   useEffect(() => navigation.addListener("focus", loadHistory), [navigation, loadHistory])
-  useEffect(loadHistory, [loadHistory])
+  const firstDay = useRef(today)
+  useEffect(() => {
+    if (today !== firstDay.current) loadHistory()
+  }, [today, loadHistory])
 
   const goalMl = profile.stats?.dailyWaterGoal ?? 2500
   const days = useMemo(

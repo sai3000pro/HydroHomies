@@ -32,8 +32,16 @@ service cloud.firestore {
 
     // Private profile: email and body stats. Only the owner can see it.
     match /users/{uid} {
+      // The hackathon-era users/{uid}.pet can only be removed (by the migration), never
+      // added or edited; otherwise it could be planted to "migrate" a high-XP pet
+      function legacyPetUntouched() {
+        return !('pet' in request.resource.data)
+          || (resource != null && 'pet' in resource.data
+            && request.resource.data.pet == resource.data.pet);
+      }
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)
+        && legacyPetUntouched()
         && request.resource.data.get('username', '') is string
         && request.resource.data.get('username', '').size() <= 24
         && request.resource.data.get('stats', {}).get('dailyWaterGoal', 2500) is number
@@ -96,6 +104,24 @@ service cloud.firestore {
       function isHealth(h) { return h is number && h >= 0 && h <= 100; }
       function xpDelta() { return request.resource.data.experience - resource.data.experience; }
       function linked() { return request.resource.data.get('lastEntryId', ''); }
+      function userPath() { return /databases/$(database)/documents/users/$(uid); }
+      // Account deletion sets users/{uid}.deleting first; then the pet may go
+      function accountDeleting() {
+        return exists(userPath()) && get(userPath()).data.get('deleting', false) == true;
+      }
+      // The one-time move of a hackathon pet out of users/{uid}.pet, in the same write
+      function isLegacyMigration() {
+        return exists(userPath()) && 'pet' in get(userPath()).data
+          && existsAfter(userPath()) && !('pet' in getAfter(userPath()).data);
+      }
+      function lastFedUnchanged() {
+        return request.resource.data.get('lastFed', null) == resource.data.get('lastFed', null);
+      }
+      // A drink restores at most (ml / daily goal) * 100 health, on top of the last stored value
+      function healthWithin(amount) {
+        let goal = get(userPath()).data.get('stats', {}).get('dailyWaterGoal', 2500);
+        return request.resource.data.health <= resource.data.get('health', 100) + amount * 100 / goal + 1;
+      }
 
       allow read: if signedIn();
       allow create: if isOwner(uid)
@@ -103,12 +129,15 @@ service cloud.firestore {
         && request.resource.data.species in ['elephant', 'alien', 'sphele']
         && isPetName(request.resource.data.name)
         && request.resource.data.experience is int
-        // New pets start at 0; pets migrated from the hackathon build keep their small XP
-        && request.resource.data.experience >= 0
-        && request.resource.data.experience <= 1000
+        // New pets start at 0; only a migrated hackathon pet keeps its (capped) XP
+        && (request.resource.data.experience == 0
+          || (isLegacyMigration()
+            && request.resource.data.experience > 0
+            && request.resource.data.experience <= 1000))
         && isHealth(request.resource.data.get('health', 100));
       // XP only moves together with a drink in the same write: +ml/10 when one is logged,
-      // back down (at most that much) when one is deleted. Renaming changes nothing else.
+      // back down (at most that much) when one is deleted. Feeding stamps lastFed with the
+      // server time, so health decay can't be paused. Renaming changes nothing else.
       allow update: if isOwner(uid)
         && request.resource.data.userId == uid
         && request.resource.data.species == resource.data.species
@@ -118,13 +147,19 @@ service cloud.firestore {
         && isHealth(request.resource.data.health)
         && (
           (isNewEntry(linked(), uid)
-            && xpDelta() == math.floor(getAfter(entryPath(linked())).data.amount / 10))
+            && xpDelta() == math.floor(getAfter(entryPath(linked())).data.amount / 10)
+            && healthWithin(getAfter(entryPath(linked())).data.amount)
+            && request.resource.data.lastFed == request.time)
           || (isRemovedEntry(linked(), uid)
             && xpDelta() <= 0
-            && -xpDelta() <= math.floor(get(entryPath(linked())).data.amount / 10))
-          || (xpDelta() == 0 && request.resource.data.health == resource.data.health)
+            && -xpDelta() <= math.floor(get(entryPath(linked())).data.amount / 10)
+            // Undoing a drink never adds health
+            && request.resource.data.health <= resource.data.get('health', 100)
+            && lastFedUnchanged())
+          || (xpDelta() == 0 && request.resource.data.health == resource.data.health
+            && lastFedUnchanged())
         );
-      allow delete: if isOwner(uid);
+      allow delete: if isOwner(uid) && accountDeleting();
     }
 
     // Individual drinks: private to the owner.
@@ -145,6 +180,12 @@ service cloud.firestore {
       }
       function petOf() { return /databases/$(database)/documents/pets/$(request.auth.uid); }
       function lowered(before, by) { return before >= by ? before - by : 0; }
+      // During account deletion (users/{uid}.deleting) drinks can go without the totals,
+      // which are deleted too. One cached read, so big batches stay under the access limit.
+      function accountDeleting() {
+        let u = /databases/$(database)/documents/users/$(request.auth.uid);
+        return exists(u) && get(u).data.get('deleting', false) == true;
+      }
       function summaryLowered() {
         return !existsAfter(summaryOf())
           || getAfter(summaryOf()).data.totalMl == lowered(get(summaryOf()).data.totalMl, resource.data.amount);
@@ -155,7 +196,7 @@ service cloud.firestore {
             == lowered(get(petOf()).data.experience, math.floor(resource.data.amount / 10));
       }
       allow delete: if signedIn() && resource.data.userId == request.auth.uid
-        && summaryLowered() && petLowered();
+        && (accountDeleting() || (summaryLowered() && petLowered()));
       allow update: if false;
     }
 
@@ -176,6 +217,11 @@ service cloud.firestore {
       }
       function sameDay(e) {
         return e.dateKey == request.resource.data.dateKey && e.amount == (delta() < 0 ? -delta() : delta());
+      }
+      // Removing a drink lowers the total by its amount, or to 0 if the total was already smaller
+      function sameDayRemoved(e) {
+        return e.dateKey == request.resource.data.dateKey
+          && (e.amount == -delta() || (request.resource.data.totalMl == 0 && -delta() < e.amount));
       }
       function validShape() {
         let d = request.resource.data;
@@ -204,7 +250,7 @@ service cloud.firestore {
             && request.resource.data.entryCount == prevCount() + 1
             && petMatches())
           || (delta() < 0 && isRemovedEntry(linked(), request.auth.uid)
-            && sameDay(get(entryPath(linked())).data)
+            && sameDayRemoved(get(entryPath(linked())).data)
             && request.resource.data.entryCount == (prevCount() > 0 ? prevCount() - 1 : 0)
             && petMatches())
           // Display info (e.g. a new username or pet name) can change on its own

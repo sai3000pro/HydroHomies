@@ -34,6 +34,10 @@ export type AuthContextType = {
   isSigningUp: boolean
   setIsSigningUp: (v: boolean) => void
   logout: () => Promise<void>
+  /** True while deleteAccount runs */
+  isDeletingAccount: boolean
+  /** Re-checks the password, deletes all the user's data, then the sign-in account */
+  deleteAccount: (password: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
@@ -122,6 +126,27 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
     await authService.signOut()
   }, [])
 
+  // Holds the navigator on a spinner: deleting the pet and profile would otherwise route
+  // to PetSelect / Onboarding mid-deletion and unmount the screen showing errors.
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const deleteAccount = useCallback(
+    async (password: string) => {
+      if (!profile) throw new Error("Not signed in.")
+      setIsDeletingAccount(true)
+      try {
+        // Check the password first, so a typo doesn't start deleting anything
+        await authService.reauthenticate(password)
+        await cancelReminders().catch(() => {})
+        await databaseService.deleteAllUserData(profile)
+        // Signs out; the navigator returns to Login
+        await authService.deleteCurrentUser()
+      } finally {
+        setIsDeletingAccount(false)
+      }
+    },
+    [profile],
+  )
+
   const value = useMemo<AuthContextType>(
     () => ({
       user,
@@ -134,6 +159,8 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
       isSigningUp: isSigningUp || awaitingProfile,
       setIsSigningUp,
       logout,
+      isDeletingAccount,
+      deleteAccount,
     }),
     [
       user,
@@ -147,6 +174,8 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
       awaitingProfile,
       setIsSigningUp,
       logout,
+      isDeletingAccount,
+      deleteAccount,
     ],
   )
 
